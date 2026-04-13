@@ -1,34 +1,36 @@
 #!/usr/bin/env python3
 """
-github_scraper.py – Extract translatable text from cloudflare-docs GitHub repo.
+github_scraper.py – Resumable MDX content extraction and translation pipeline.
 
-Since developers.cloudflare.com may not be directly accessible, this script
-fetches the documentation source files (MDX) from the cloudflare/cloudflare-docs
-GitHub repository and extracts translatable text entries.
+Downloads MDX source files from cloudflare/cloudflare-docs, extracts
+translatable text, and produces i18n JSON files.
 
-Strategy:
-  1. Load a pre-built file list (file_list.json) of all .mdx paths, or
-     discover them from the repo tree via the GitHub MCP tool.
-  2. Download raw MDX content from raw.githubusercontent.com (no auth needed).
-  3. Extract translatable text entries.
-  4. Translate to Chinese using deep-translator.
+Features:
+  - Disk-cached MDX downloads (cache/mdx/) with resume support
+  - Incremental extraction with entries checkpoint (cache/entries_cache.json)
+  - Rich content extraction: frontmatter, headings, paragraphs, list items,
+    tables, admonitions (:::note/warning/caution/tip), details/summary blocks
+  - Coverage reporting (cache/coverage_report.json)
 
 Usage:
-    python github_scraper.py                    # Full pipeline
-    python github_scraper.py --max-pages 20     # Limit pages for testing
-    python github_scraper.py --sections workers pages r2  # Specific sections only
-    python github_scraper.py --skip-translate   # Extract only, no translation
-    python github_scraper.py --build-file-list  # Discover MDX files via tree crawl
+    python github_scraper.py                          # Full pipeline
+    python github_scraper.py --max-pages 50           # Limit pages
+    python github_scraper.py --sections workers r2    # Specific sections
+    python github_scraper.py --skip-translate         # Extract only
+    python github_scraper.py --fresh                  # Ignore cache
+    python github_scraper.py --concurrency 16         # Faster downloads
 """
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
 import sys
-from typing import Any, Dict, List, Set
+import time
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote
 
 import aiohttp
@@ -51,274 +53,497 @@ RAW_BASE = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FILE_LIST_PATH = os.path.join(SCRIPT_DIR, "file_list.json")
 
-# Concurrency for raw content downloads
-DOWNLOAD_CONCURRENCY = 8
+MAX_RETRIES = 3
+CHECKPOINT_INTERVAL = 500
+PROGRESS_LOG_INTERVAL = 100
 
 
-async def build_file_list_from_tree(session: aiohttp.ClientSession) -> List[str]:
-    """
-    Crawl the repo tree page-by-page via raw.githubusercontent.com to discover .mdx files.
-    Falls back to a known section list and discovers files within each.
-    """
-    # Known top-level sections (from repo exploration)
-    known_sections = [
-        "1.1.1.1", "agents", "ai-crawl-control", "ai-gateway", "ai-search",
-        "analytics", "api-shield", "argo-smart-routing", "automatic-platform-optimization",
-        "billing", "bots", "browser-rendering", "byoip", "cache", "china-network",
-        "client-ip-geolocation", "client-side-security", "cloudflare-agent",
-        "cloudflare-challenges", "cloudflare-for-platforms", "cloudflare-one",
-        "cloudflare-wan", "constellation", "containers", "d1", "data-localization",
-        "ddos-protection", "dmarc-management", "dns", "durable-objects",
-        "dynamic-workers", "email-routing", "email-security", "firewall",
-        "fundamentals", "google-tag-gateway", "health-checks", "hyperdrive",
-        "images", "key-transparency", "kv", "learning-paths", "load-balancing",
-        "log-explorer", "logs", "magic-transit", "migration-guides", "moq",
-        "multi-cloud-networking", "network-error-logging", "network-flow",
-        "network-interconnect", "network", "notifications", "pages", "pipelines",
-        "privacy-gateway", "privacy-proxy", "pulumi", "queues", "r2-sql", "r2",
-        "radar", "randomness-beacon", "realtime", "reference-architecture",
-        "registrar", "rules", "ruleset-engine", "sandbox", "secrets-store",
-        "security-center", "security", "smart-shield", "spectrum", "speed", "ssl",
-        "stream", "style-guide", "support", "tenant", "terraform", "time-services",
-        "tunnel", "turnstile", "use-cases", "vectorize", "version-management",
-        "waf", "waiting-room", "warp-client", "web-analytics", "web3",
-        "workers-ai", "workers-vpc", "workers", "workflows", "zaraz",
-    ]
-    logger.info("Will scan %d known sections for MDX files", len(known_sections))
-    return known_sections
+# ── Caching helpers ─────────────────────────────────────────────────────────
 
 
-async def discover_mdx_files_in_section(
-    session: aiohttp.ClientSession, section: str
-) -> List[str]:
-    """
-    Discover .mdx files in a section by fetching the GitHub tree API for each dir.
-    Uses raw.githubusercontent.com tree discovery.
-    Returns list of file paths relative to repo root.
-    """
-    # Use a simple recursive approach via raw github content
-    # We'll try to fetch the directory listing via the GitHub API
-    # Since direct API might not work, we'll construct paths from known patterns
-    files: List[str] = []
-    base = f"{DOCS_BASE_PATH}/{section}"
-
-    # Try to get the index file first
-    index_url = f"{RAW_BASE}/{base}/index.mdx"
-    try:
-        async with session.head(index_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-            if resp.status == 200:
-                files.append(f"{base}/index.mdx")
-    except Exception:
-        pass
-
-    return files
+def _safe_filename(file_path: str) -> str:
+    """Convert an MDX repo path to a flat, filesystem-safe cache filename."""
+    return hashlib.sha256(file_path.encode()).hexdigest() + ".mdx"
 
 
-def extract_text_from_mdx(content: str, file_path: str) -> Dict[str, Any]:
-    """
-    Extract translatable text entries from MDX content.
-    Returns a dict with structured text entries.
-    """
-    entries: Dict[str, Any] = {}
+def _mdx_cache_path(cache_dir: str, file_path: str) -> str:
+    return os.path.join(cache_dir, "mdx", _safe_filename(file_path))
 
-    # Extract frontmatter title and description
-    fm_match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
-    if fm_match:
-        fm = fm_match.group(1)
-        title_match = re.search(r"^title:\s*(.+)$", fm, re.MULTILINE)
-        if title_match:
-            title = title_match.group(1).strip().strip('"').strip("'")
-            if title:
-                entries["title"] = title
 
-        desc_match = re.search(r"^description:\s*(.+)$", fm, re.MULTILINE)
-        if desc_match:
-            desc = desc_match.group(1).strip().strip('"').strip("'")
-            if desc:
-                entries["description"] = desc
+def _read_cached_mdx(cache_dir: str, file_path: str) -> Optional[str]:
+    p = _mdx_cache_path(cache_dir, file_path)
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return None
 
-        sidebar_match = re.search(r"^sidebar:\s*\n\s*label:\s*(.+)$", fm, re.MULTILINE)
-        if sidebar_match:
-            label = sidebar_match.group(1).strip().strip('"').strip("'")
-            if label:
-                entries["sidebar_label"] = label
 
-    # Remove frontmatter for body parsing
-    body = re.sub(r"^---\s*\n.*?\n---\s*\n", "", content, count=1, flags=re.DOTALL)
+def _write_cached_mdx(cache_dir: str, file_path: str, content: str) -> None:
+    p = _mdx_cache_path(cache_dir, file_path)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(content)
 
-    # Remove import statements
-    body = re.sub(r"^import\s+.*$", "", body, flags=re.MULTILINE)
 
-    # Remove code blocks (we don't translate code)
-    body = re.sub(r"```[\s\S]*?```", "", body)
-    body = re.sub(r"`[^`]+`", "", body)
+def _load_entries_cache(cache_dir: str) -> Dict[str, Dict[str, Any]]:
+    p = os.path.join(cache_dir, "entries_cache.json")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-    # Remove HTML/JSX tags but keep their text content
-    body = re.sub(r"<[^>]+>", " ", body)
 
-    # Extract headings
-    headings = []
-    for m in re.finditer(r"^#{1,6}\s+(.+)$", body, re.MULTILINE):
-        h = m.group(1).strip()
-        # Remove markdown links from headings
-        h = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", h)
-        h = h.strip()
-        if h and len(h) > 1:
-            headings.append(h)
-    if headings:
-        entries["headings"] = headings
+def _save_entries_cache(
+    cache_dir: str, entries: Dict[str, Dict[str, Any]]
+) -> None:
+    p = os.path.join(cache_dir, "entries_cache.json")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False)
 
-    # Extract paragraphs (lines of text that are not headings, lists, etc.)
-    paragraphs = []
-    for line in body.split("\n"):
-        line = line.strip()
-        # Skip empty, headings, list items, table rows, images, links-only lines
-        if not line or line.startswith("#") or line.startswith("|") or line.startswith("!"):
-            continue
-        if line.startswith("- ") or line.startswith("* ") or re.match(r"^\d+\.\s", line):
-            # List item - extract content
-            item = re.sub(r"^[-*]\s+|^\d+\.\s+", "", line).strip()
-            item = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", item)  # remove links
-            if item and len(item) > 2:
-                paragraphs.append(item)
-            continue
-        # Regular paragraph line
-        line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)  # remove links
-        line = re.sub(r"\*\*([^*]+)\*\*", r"\1", line)  # remove bold
-        line = re.sub(r"\*([^*]+)\*", r"\1", line)  # remove italic
-        line = line.strip()
-        if line and len(line) > 2:
-            paragraphs.append(line)
 
-    if paragraphs:
-        # Deduplicate while preserving order
-        seen: Set[str] = set()
-        unique_p = []
-        for p in paragraphs:
-            if p not in seen:
-                seen.add(p)
-                unique_p.append(p)
-        entries["paragraphs"] = unique_p
-
-    return entries
+# ── Path conversion ─────────────────────────────────────────────────────────
 
 
 def mdx_path_to_url_path(mdx_path: str) -> str:
-    """Convert a file path like 'src/content/docs/workers/index.mdx' to '/workers/'."""
-    # Remove base path
+    """Convert e.g. 'src/content/docs/workers/index.mdx' → '/workers/'."""
     rel = mdx_path.replace(DOCS_BASE_PATH + "/", "")
-    # Remove .mdx extension
     rel = rel.rsplit(".mdx", 1)[0]
-    # Remove trailing 'index'
     if rel.endswith("/index") or rel == "index":
         rel = rel.rsplit("index", 1)[0]
-    # Ensure leading and trailing slashes
     path = "/" + rel.strip("/")
     if not path.endswith("/"):
         path += "/"
     return path
 
 
-async def scrape_section(
-    session: aiohttp.ClientSession, section: str, file_paths: List[str]
-) -> Dict[str, Dict[str, Any]]:
-    """Download and extract text from a list of MDX file paths."""
-    entries: Dict[str, Dict[str, Any]] = {}
-    sem = asyncio.Semaphore(DOWNLOAD_CONCURRENCY)
+# ── Content extraction ──────────────────────────────────────────────────────
 
-    async def _process_file(fpath: str) -> None:
-        async with sem:
-            raw_url = f"{RAW_BASE}/{quote(fpath, safe='/')}"
-            try:
-                async with session.get(raw_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status != 200:
-                        return
-                    content = await resp.text()
-            except Exception as exc:
-                logger.debug("  Error downloading %s: %s", fpath, exc)
-                return
 
-            url_path = mdx_path_to_url_path(fpath)
-            page_entries = extract_text_from_mdx(content, fpath)
+def _strip_md_formatting(text: str) -> str:
+    """Remove markdown inline formatting but keep text content."""
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)   # links
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)        # images
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)            # bold
+    text = re.sub(r"__(.+?)__", r"\1", text)                 # bold alt
+    text = re.sub(r"\*(.+?)\*", r"\1", text)                 # italic
+    text = re.sub(r"_(.+?)_", r"\1", text)                   # italic alt
+    text = re.sub(r"~~(.+?)~~", r"\1", text)                 # strikethrough
+    return text.strip()
 
-            if page_entries:
-                entries[url_path] = page_entries
 
-    tasks = [_process_file(fp) for fp in file_paths]
-    await asyncio.gather(*tasks)
+def _is_translatable(text: str) -> bool:
+    """Return True if text is worth translating (>2 chars, not pure punctuation)."""
+    if len(text) <= 2:
+        return False
+    if re.fullmatch(r"[\s\-_=|/\\:;.,!?#*`~<>{}()\[\]\"']+", text):
+        return False
+    return True
 
-    logger.info("  Section %s: %d/%d pages extracted", section, len(entries), len(file_paths))
+
+def _clean_line(line: str) -> str:
+    """Strip inline code, JSX/HTML tags, and markdown formatting from a line."""
+    line = re.sub(r"`[^`]*`", "", line)           # inline code
+    line = re.sub(r"<[^>]+>", " ", line)           # HTML/JSX tags
+    line = _strip_md_formatting(line)
+    return re.sub(r"\s+", " ", line).strip()
+
+
+def _dedupe(items: List[str]) -> List[str]:
+    """Deduplicate while preserving order."""
+    seen: Set[str] = set()
+    out: List[str] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
+
+
+def extract_text_from_mdx(content: str, file_path: str) -> Dict[str, Any]:
+    """
+    Extract translatable text entries from MDX content.
+
+    Returns a dict with keys: title, description, sidebar_label,
+    headings, paragraphs, list_items, table_cells, admonitions.
+    Only present when non-empty.
+    """
+    entries: Dict[str, Any] = {}
+
+    # ── Frontmatter ─────────────────────────────────────────────────────
+    fm_match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+    if fm_match:
+        fm = fm_match.group(1)
+        title_m = re.search(r"^title:\s*(.+)$", fm, re.MULTILINE)
+        if title_m:
+            t = title_m.group(1).strip().strip("\"'")
+            if t:
+                entries["title"] = t
+
+        desc_m = re.search(r"^description:\s*(.+)$", fm, re.MULTILINE)
+        if desc_m:
+            d = desc_m.group(1).strip().strip("\"'")
+            if d:
+                entries["description"] = d
+
+        sidebar_m = re.search(
+            r"^sidebar:\s*\n\s*label:\s*(.+)$", fm, re.MULTILINE
+        )
+        if sidebar_m:
+            lbl = sidebar_m.group(1).strip().strip("\"'")
+            if lbl:
+                entries["sidebar_label"] = lbl
+
+    # ── Prepare body ────────────────────────────────────────────────────
+    body = re.sub(
+        r"^---\s*\n.*?\n---\s*\n", "", content, count=1, flags=re.DOTALL
+    )
+    # Remove import statements
+    body = re.sub(r"^import\s+.*$", "", body, flags=re.MULTILINE)
+
+    # ── Extract admonitions BEFORE stripping code blocks ────────────────
+    admonitions: List[str] = []
+    for m in re.finditer(
+        r"^:::(note|warning|caution|tip|danger|important)\s*(?:\[.*?\])?\s*\n"
+        r"(.*?)\n^:::\s*$",
+        body,
+        re.MULTILINE | re.DOTALL,
+    ):
+        block = m.group(2).strip()
+        for line in block.split("\n"):
+            cleaned = _clean_line(line)
+            if _is_translatable(cleaned):
+                admonitions.append(cleaned)
+
+    # ── Extract table cells BEFORE removing table rows ──────────────────
+    table_cells: List[str] = []
+    for m in re.finditer(r"^\|(.+)\|$", body, re.MULTILINE):
+        row = m.group(1)
+        # Skip separator rows (---|---)
+        if re.fullmatch(r"[\s|:\-]+", row):
+            continue
+        for cell in row.split("|"):
+            cleaned = _clean_line(cell)
+            if _is_translatable(cleaned):
+                table_cells.append(cleaned)
+
+    # ── Remove code blocks ──────────────────────────────────────────────
+    body = re.sub(r"```[\s\S]*?```", "", body)
+    body = re.sub(r"`[^`]*`", "", body)
+
+    # ── Remove admonition fences (content already extracted) ────────────
+    body = re.sub(
+        r"^:::(note|warning|caution|tip|danger|important)\s*(?:\[.*?\])?\s*\n"
+        r".*?\n^:::\s*$",
+        "",
+        body,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+
+    # ── Remove table rows (content already extracted) ───────────────────
+    body = re.sub(r"^\|.*\|$", "", body, flags=re.MULTILINE)
+
+    # ── Remove HTML/JSX tags but keep text ──────────────────────────────
+    body = re.sub(r"<[^>]+>", " ", body)
+
+    # ── Extract headings ────────────────────────────────────────────────
+    headings: List[str] = []
+    for m in re.finditer(r"^#{1,6}\s+(.+)$", body, re.MULTILINE):
+        h = _strip_md_formatting(m.group(1).strip())
+        if _is_translatable(h):
+            headings.append(h)
+
+    # ── Extract list items and paragraphs ───────────────────────────────
+    list_items: List[str] = []
+    paragraphs: List[str] = []
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Skip headings (already extracted), images, horizontal rules
+        if (
+            stripped.startswith("#")
+            or stripped.startswith("![")
+            or re.fullmatch(r"[-*_]{3,}", stripped)
+            or re.fullmatch(r"---+", stripped)
+        ):
+            continue
+
+        # List items (unordered: - or *, ordered: 1.)
+        list_match = re.match(r"^(?:[-*+]|\d+\.)\s+(.*)", stripped)
+        if list_match:
+            item = _clean_line(list_match.group(1))
+            if _is_translatable(item):
+                list_items.append(item)
+            continue
+
+        # Regular paragraph line
+        cleaned = _clean_line(stripped)
+        if _is_translatable(cleaned):
+            paragraphs.append(cleaned)
+
+    # ── Assemble entries ────────────────────────────────────────────────
+    if headings:
+        entries["headings"] = _dedupe(headings)
+    if paragraphs:
+        entries["paragraphs"] = _dedupe(paragraphs)
+    if list_items:
+        entries["list_items"] = _dedupe(list_items)
+    if table_cells:
+        entries["table_cells"] = _dedupe(table_cells)
+    if admonitions:
+        entries["admonitions"] = _dedupe(admonitions)
+
     return entries
 
 
-async def run(args: argparse.Namespace) -> None:
-    """Main pipeline."""
-    all_entries: Dict[str, Dict[str, Any]] = {}
+# ── Downloading ─────────────────────────────────────────────────────────────
 
-    # Load or build the file list
-    if os.path.exists(FILE_LIST_PATH):
-        logger.info("Loading file list from %s", FILE_LIST_PATH)
-        with open(FILE_LIST_PATH, "r", encoding="utf-8") as f:
-            file_list = json.load(f)  # {section: [file_paths]}
-    else:
+
+async def _download_one(
+    session: aiohttp.ClientSession,
+    sem: asyncio.Semaphore,
+    file_path: str,
+    cache_dir: str,
+    fresh: bool,
+) -> Tuple[str, Optional[str], Optional[str]]:
+    """
+    Download a single MDX file.  Returns (file_path, content_or_None, error_or_None).
+    Uses disk cache unless *fresh* is True.
+    """
+    if not fresh:
+        cached = _read_cached_mdx(cache_dir, file_path)
+        if cached is not None:
+            return file_path, cached, None
+
+    raw_url = f"{RAW_BASE}/{quote(file_path, safe='/')}"
+    last_err: Optional[str] = None
+    async with sem:
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                async with session.get(
+                    raw_url, timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status == 200:
+                        text = await resp.text()
+                        _write_cached_mdx(cache_dir, file_path, text)
+                        return file_path, text, None
+                    last_err = f"HTTP {resp.status}"
+            except Exception as exc:
+                last_err = str(exc)
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(2 ** attempt)
+
+    return file_path, None, last_err
+
+
+# ── Main pipeline ───────────────────────────────────────────────────────────
+
+
+async def run(args: argparse.Namespace) -> None:
+    cache_dir: str = args.cache_dir
+    os.makedirs(os.path.join(cache_dir, "mdx"), exist_ok=True)
+
+    # ── Load file list ──────────────────────────────────────────────────
+    if not os.path.exists(FILE_LIST_PATH):
         logger.error(
-            "file_list.json not found. Run the file list builder first:\n"
-            "  python build_file_list.py\n"
-            "Or provide it manually."
+            "file_list.json not found. Run:\n  python build_file_list.py"
         )
         sys.exit(1)
 
-    # Filter sections if requested
-    if args.sections:
-        file_list = {s: paths for s, paths in file_list.items() if s in args.sections}
+    with open(FILE_LIST_PATH, "r", encoding="utf-8") as f:
+        file_list: Dict[str, List[str]] = json.load(f)
 
-    total_files = sum(len(paths) for paths in file_list.values())
-    logger.info("Will process %d files across %d sections", total_files, len(file_list))
+    if args.sections:
+        file_list = {
+            s: p for s, p in file_list.items() if s in args.sections
+        }
+
+    # Flatten to a single ordered list
+    all_paths: List[str] = []
+    for paths in file_list.values():
+        all_paths.extend(paths)
+
+    total_in_file_list = len(all_paths)
 
     if args.max_pages > 0:
-        # Limit total files
-        limited: Dict[str, List[str]] = {}
-        count = 0
-        for section, paths in file_list.items():
-            remaining = args.max_pages - count
-            if remaining <= 0:
-                break
-            limited[section] = paths[:remaining]
-            count += len(limited[section])
-        file_list = limited
-        total_files = sum(len(paths) for paths in file_list.values())
-        logger.info("Limited to %d files", total_files)
+        all_paths = all_paths[: args.max_pages]
 
-    async with aiohttp.ClientSession() as session:
-        for section, paths in file_list.items():
-            section_entries = await scrape_section(session, section, paths)
-            all_entries.update(section_entries)
-            logger.info("Progress: %d total pages extracted", len(all_entries))
+    logger.info(
+        "Will process %d files (%d in file_list.json, %d sections)",
+        len(all_paths),
+        total_in_file_list,
+        len(file_list),
+    )
 
-    # Save en.json
+    # ── Resume: load cached entries ─────────────────────────────────────
+    if args.fresh:
+        all_entries: Dict[str, Dict[str, Any]] = {}
+    else:
+        all_entries = _load_entries_cache(cache_dir)
+        if all_entries:
+            logger.info("Resumed %d entries from entries cache", len(all_entries))
+
+    # Build set of paths already processed (present in entries cache)
+    already_done: Set[str] = set()
+    if not args.fresh:
+        for p in all_paths:
+            url_path = mdx_path_to_url_path(p)
+            if url_path in all_entries:
+                already_done.add(p)
+
+    paths_to_process = [p for p in all_paths if p not in already_done]
+    logger.info(
+        "Skipping %d cached, downloading/extracting %d",
+        len(already_done),
+        len(paths_to_process),
+    )
+
+    # ── Download & extract ──────────────────────────────────────────────
+    sem = asyncio.Semaphore(args.concurrency)
+    stats = {
+        "downloaded_ok": len(already_done),
+        "download_errors": 0,
+        "extract_empty": 0,
+        "errors_detail": [],
+    }
+
+    processed_since_checkpoint = 0
+    connector = aiohttp.TCPConnector(limit=args.concurrency * 2)
+
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = [
+            _download_one(session, sem, fp, cache_dir, args.fresh)
+            for fp in paths_to_process
+        ]
+
+        for i, coro in enumerate(asyncio.as_completed(tasks), 1):
+            file_path, content, err = await coro
+
+            if err is not None:
+                stats["download_errors"] += 1
+                stats["errors_detail"].append(
+                    {"file": file_path, "error": err}
+                )
+                continue
+
+            stats["downloaded_ok"] += 1
+
+            url_path = mdx_path_to_url_path(file_path)
+            page_entries = extract_text_from_mdx(content, file_path)
+
+            if page_entries:
+                all_entries[url_path] = page_entries
+            else:
+                stats["extract_empty"] += 1
+
+            processed_since_checkpoint += 1
+
+            if i % PROGRESS_LOG_INTERVAL == 0:
+                logger.info(
+                    "Progress: %d/%d downloaded (%d entries so far)",
+                    i,
+                    len(paths_to_process),
+                    len(all_entries),
+                )
+
+            if processed_since_checkpoint >= CHECKPOINT_INTERVAL:
+                _save_entries_cache(cache_dir, all_entries)
+                processed_since_checkpoint = 0
+                logger.info("Checkpoint saved (%d entries)", len(all_entries))
+
+    # Final checkpoint
+    _save_entries_cache(cache_dir, all_entries)
+
+    # ── Save en.json ────────────────────────────────────────────────────
     os.makedirs(config.I18N_DIR, exist_ok=True)
     with open(config.EN_JSON_PATH, "w", encoding="utf-8") as f:
         json.dump(all_entries, f, indent=2, ensure_ascii=False)
     logger.info("Saved %d pages to %s", len(all_entries), config.EN_JSON_PATH)
 
-    # Translate
+    # ── Coverage report ─────────────────────────────────────────────────
+    coverage = {
+        "total_files_in_file_list": total_in_file_list,
+        "files_attempted": len(all_paths),
+        "files_downloaded_ok": stats["downloaded_ok"],
+        "files_with_errors": stats["download_errors"],
+        "files_with_no_content": stats["extract_empty"],
+        "total_url_paths_in_output": len(all_entries),
+        "errors": stats["errors_detail"][:50],
+    }
+    report_path = os.path.join(cache_dir, "coverage_report.json")
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(coverage, f, indent=2, ensure_ascii=False)
+
+    logger.info("═══ Coverage Report ═══")
+    logger.info("  Total files in file_list.json : %d", coverage["total_files_in_file_list"])
+    logger.info("  Files downloaded successfully  : %d", coverage["files_downloaded_ok"])
+    logger.info("  Files with extraction errors   : %d", coverage["files_with_errors"])
+    logger.info("  Files with no extractable text : %d", coverage["files_with_no_content"])
+    logger.info("  Total unique URL paths output  : %d", coverage["total_url_paths_in_output"])
+    logger.info("  Report saved to %s", report_path)
+
+    # ── Translation ─────────────────────────────────────────────────────
     if not args.skip_translate:
         logger.info("═══ Starting Translation ═══")
         from translator import translate_entries
-        zh_entries = translate_entries(all_entries, use_online=getattr(args, 'online', False))
+
+        zh_entries = translate_entries(
+            all_entries, use_online=getattr(args, "online", False)
+        )
         with open(config.ZH_CN_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(zh_entries, f, indent=2, ensure_ascii=False)
-        logger.info("Saved %d pages to %s", len(zh_entries), config.ZH_CN_JSON_PATH)
+        logger.info(
+            "Saved %d pages to %s", len(zh_entries), config.ZH_CN_JSON_PATH
+        )
 
     logger.info("═══ Done ═══")
 
 
+# ── CLI ─────────────────────────────────────────────────────────────────────
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="CFDC GitHub Scraper")
-    parser.add_argument("--sections", nargs="+", help="Specific sections to scrape")
-    parser.add_argument("--max-pages", type=int, default=0, help="Max total pages (0=unlimited)")
-    parser.add_argument("--skip-translate", action="store_true", help="Skip translation step")
-    parser.add_argument("--online", action="store_true", help="Use online translation (Google Translate)")
+    parser = argparse.ArgumentParser(
+        description="CFDC – Resumable MDX extraction & translation pipeline"
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=0,
+        help="Max total pages to process (0 = unlimited)",
+    )
+    parser.add_argument(
+        "--sections",
+        nargs="+",
+        help="Only process these sections",
+    )
+    parser.add_argument(
+        "--skip-translate",
+        action="store_true",
+        help="Skip the translation step",
+    )
+    parser.add_argument(
+        "--online",
+        action="store_true",
+        help="Use online translation (Google Translate)",
+    )
+    parser.add_argument(
+        "--fresh",
+        action="store_true",
+        help="Ignore cache and re-download everything",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        default=os.path.join(SCRIPT_DIR, "cache"),
+        help="Cache directory (default: cache/ in script dir)",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=8,
+        help="Download concurrency (default: 8)",
+    )
     args = parser.parse_args()
     asyncio.run(run(args))
 
