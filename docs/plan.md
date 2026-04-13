@@ -101,3 +101,37 @@ python main.py
 - 可通过 `config.py` 中的 `MAX_PAGES` 限制抓取数量，便于调试。
 - 翻译速度受 Google Translate 免费接口限制，自动限速处理。
 - 专有名词保持英文原文（Cloudflare、Workers、KV、R2、D1、Pages、Wrangler 等）。
+
+## 两种数据源
+
+### 方式一：Playwright-stealth 直接抓取（推荐，需要网络访问）
+使用 `main.py`，通过 Playwright-stealth 打开浏览器直接访问 developers.cloudflare.com，
+从渲染后的页面中提取文本。这种方式可以获取最完整、最准确的内容。
+
+```bash
+python main.py --bfs --max-pages 100
+```
+
+### 方式二：GitHub 源码抓取（备用方案）
+使用 `github_scraper.py`，从 cloudflare/cloudflare-docs 仓库的 MDX 源文件中提取文本。
+此方式不需要浏览器，适合在网络受限环境或 CI/CD 中使用。
+
+```bash
+python build_file_list.py          # 发现所有 MDX 文件
+python github_scraper.py           # 提取内容并翻译
+python github_scraper.py --online  # 使用 Google Translate 在线翻译
+```
+
+## 翻译方式
+
+### 离线翻译（默认）
+使用内置的技术术语词典进行关键词替换。速度快，但翻译质量有限。
+适合在网络受限环境中使用，生成的翻译可作为人工翻译的基础。
+
+### 在线翻译（推荐）
+使用 Google Translate 免费接口进行完整句子翻译。
+需要能访问 translate.google.com。
+
+```bash
+python github_scraper.py --online
+```

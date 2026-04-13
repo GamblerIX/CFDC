@@ -305,7 +305,7 @@ async def run(args: argparse.Namespace) -> None:
     if not args.skip_translate:
         logger.info("═══ Starting Translation ═══")
         from translator import translate_entries
-        zh_entries = translate_entries(all_entries)
+        zh_entries = translate_entries(all_entries, use_online=getattr(args, 'online', False))
         with open(config.ZH_CN_JSON_PATH, "w", encoding="utf-8") as f:
             json.dump(zh_entries, f, indent=2, ensure_ascii=False)
         logger.info("Saved %d pages to %s", len(zh_entries), config.ZH_CN_JSON_PATH)
@@ -318,6 +318,7 @@ def main() -> None:
     parser.add_argument("--sections", nargs="+", help="Specific sections to scrape")
     parser.add_argument("--max-pages", type=int, default=0, help="Max total pages (0=unlimited)")
     parser.add_argument("--skip-translate", action="store_true", help="Skip translation step")
+    parser.add_argument("--online", action="store_true", help="Use online translation (Google Translate)")
     args = parser.parse_args()
     asyncio.run(run(args))
 

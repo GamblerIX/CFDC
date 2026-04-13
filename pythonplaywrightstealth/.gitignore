@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.pyo
+entries_cache.json
+urls.json
