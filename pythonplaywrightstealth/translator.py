@@ -286,9 +286,7 @@ PHRASE_DICT: Dict[str, str] = {
     "nameserver": "名称服务器",
     "resolver": "解析器",
     "proxy": "代理",
-    "tunnel": "隧道",
     "connector": "连接器",
-    "gateway": "网关",
     "endpoint": "端点",
     "origin": "源",
     "custom domain": "自定义域名",
@@ -841,7 +839,7 @@ def _try_full_phrase_coverage(text: str) -> Optional[str]:
         temp = temp.replace(term, "")
     # Remove Chinese chars, punctuation, whitespace, digits
     leftover = re.sub(r"[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\s\d\W]+", " ", temp).strip()
-    leftover_words = [w for w in leftover.split() if len(w) > 1 and w.isalpha()]
+    leftover_words = [w for w in leftover.split() if w.isalpha()]
 
     if not leftover_words:
         # Full coverage achieved

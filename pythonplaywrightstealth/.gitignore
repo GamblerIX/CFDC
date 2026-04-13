@@ -3,3 +3,4 @@ __pycache__/
 *.pyo
 entries_cache.json
 urls.json
+cache/
