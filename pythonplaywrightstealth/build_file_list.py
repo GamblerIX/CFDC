@@ -2,20 +2,19 @@
 """
 build_file_list.py – Discover all .mdx files in cloudflare-docs repo.
 
-Uses raw.githubusercontent.com to fetch the git tree and find all MDX files
-under src/content/docs/. Outputs file_list.json.
-
-This script can also accept a pre-built tree (from GitHub MCP tools or API).
+Uses the GitHub API recursive tree endpoint to fetch every file path in a
+single request, then filters for .mdx files under src/content/docs/.
+Outputs file_list.json grouped by top-level section.
 """
 
+import argparse
 import asyncio
 import json
 import logging
 import os
-import re
 import sys
-from typing import Dict, List
-from urllib.parse import quote
+from collections import defaultdict
+from typing import Dict, List, Optional
 
 import aiohttp
 
@@ -30,239 +29,235 @@ REPO_OWNER = "cloudflare"
 REPO_NAME = "cloudflare-docs"
 BRANCH = "production"
 DOCS_BASE = "src/content/docs"
-RAW_BASE = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}"
+
+GITHUB_API = "https://api.github.com"
+TREE_URL = f"{GITHUB_API}/repos/{REPO_OWNER}/{REPO_NAME}/git/trees"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_PATH = os.path.join(SCRIPT_DIR, "file_list.json")
 
-# All known top-level sections
-KNOWN_SECTIONS = [
-    "1.1.1.1", "agents", "ai-crawl-control", "ai-gateway", "ai-search",
-    "analytics", "api-shield", "argo-smart-routing", "automatic-platform-optimization",
-    "billing", "bots", "browser-rendering", "byoip", "cache", "china-network",
-    "client-ip-geolocation", "client-side-security", "cloudflare-agent",
-    "cloudflare-challenges", "cloudflare-for-platforms", "cloudflare-one",
-    "cloudflare-wan", "constellation", "containers", "d1", "data-localization",
-    "ddos-protection", "dmarc-management", "dns", "durable-objects",
-    "dynamic-workers", "email-routing", "email-security", "firewall",
-    "fundamentals", "google-tag-gateway", "health-checks", "hyperdrive",
-    "images", "key-transparency", "kv", "learning-paths", "load-balancing",
-    "log-explorer", "logs", "magic-transit", "migration-guides", "moq",
-    "multi-cloud-networking", "network-error-logging", "network-flow",
-    "network-interconnect", "network", "notifications", "pages", "pipelines",
-    "privacy-gateway", "privacy-proxy", "pulumi", "queues", "r2-sql", "r2",
-    "radar", "randomness-beacon", "realtime", "reference-architecture",
-    "registrar", "rules", "ruleset-engine", "sandbox", "secrets-store",
-    "security-center", "security", "smart-shield", "spectrum", "speed", "ssl",
-    "stream", "style-guide", "support", "tenant", "terraform", "time-services",
-    "tunnel", "turnstile", "use-cases", "vectorize", "version-management",
-    "waf", "waiting-room", "warp-client", "web-analytics", "web3",
-    "workers-ai", "workers-vpc", "workers", "workflows", "zaraz",
-]
+MAX_RETRIES = 3
+RETRY_BACKOFF = 2  # seconds, doubled each retry
 
 
-async def probe_common_files(
-    session: aiohttp.ClientSession, section: str
+def _docs_prefix(section: str) -> str:
+    return f"{DOCS_BASE}/{section}/"
+
+
+def _section_from_path(path: str) -> Optional[str]:
+    """Extract the top-level section name from a docs path."""
+    if not path.startswith(DOCS_BASE + "/"):
+        return None
+    rest = path[len(DOCS_BASE) + 1:]
+    section = rest.split("/", 1)[0]
+    return section if section else None
+
+
+async def _fetch_json(
+    session: aiohttp.ClientSession,
+    url: str,
+    params: Optional[dict] = None,
+) -> dict:
+    """Fetch JSON from *url* with retry logic and error handling."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            async with session.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=60),
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                if resp.status == 403:
+                    # Rate-limited – honour Retry-After if present
+                    retry_after = int(resp.headers.get("Retry-After", RETRY_BACKOFF * attempt))
+                    logger.warning("Rate-limited (403). Retrying in %ds…", retry_after)
+                    await asyncio.sleep(retry_after)
+                    continue
+                body = await resp.text()
+                raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
+        except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as exc:
+            last_exc = exc
+            wait = RETRY_BACKOFF * attempt
+            logger.warning("Attempt %d/%d failed: %s. Retrying in %ds…", attempt, MAX_RETRIES, exc, wait)
+            await asyncio.sleep(wait)
+
+    raise RuntimeError(f"All {MAX_RETRIES} attempts failed for {url}") from last_exc
+
+
+# ── Primary strategy: recursive tree ────────────────────────────────────
+
+async def fetch_full_tree(session: aiohttp.ClientSession) -> dict:
+    """Fetch the full recursive git tree for the branch."""
+    url = f"{TREE_URL}/{BRANCH}"
+    logger.info("Fetching recursive tree from %s …", url)
+    return await _fetch_json(session, url, params={"recursive": "1"})
+
+
+def extract_mdx_files(tree_nodes: list) -> List[str]:
+    """Return sorted .mdx paths under DOCS_BASE from tree node list."""
+    return sorted(
+        node["path"]
+        for node in tree_nodes
+        if node.get("type") == "blob"
+        and node["path"].startswith(DOCS_BASE + "/")
+        and node["path"].endswith(".mdx")
+    )
+
+
+# ── Fallback strategy: per-section tree fetches ─────────────────────────
+
+async def _resolve_tree_sha(session: aiohttp.ClientSession) -> str:
+    """Resolve the commit SHA for BRANCH, then its root tree SHA."""
+    ref_url = f"{GITHUB_API}/repos/{REPO_OWNER}/{REPO_NAME}/git/ref/heads/{BRANCH}"
+    ref_data = await _fetch_json(session, ref_url)
+    commit_sha = ref_data["object"]["sha"]
+
+    commit_url = f"{GITHUB_API}/repos/{REPO_OWNER}/{REPO_NAME}/git/commits/{commit_sha}"
+    commit_data = await _fetch_json(session, commit_url)
+    return commit_data["tree"]["sha"]
+
+
+async def _walk_to_subtree(
+    session: aiohttp.ClientSession, root_sha: str, path_parts: List[str]
+) -> str:
+    """Walk from root tree SHA down the given path components, returning the
+    SHA of the final subtree."""
+    sha = root_sha
+    for part in path_parts:
+        data = await _fetch_json(session, f"{TREE_URL}/{sha}")
+        entry = next((e for e in data["tree"] if e["path"] == part and e["type"] == "tree"), None)
+        if entry is None:
+            raise RuntimeError(f"Subtree '{part}' not found under {sha}")
+        sha = entry["sha"]
+    return sha
+
+
+async def _fetch_section_tree(
+    session: aiohttp.ClientSession, docs_sha: str, section: str
 ) -> List[str]:
-    """
-    Probe common file patterns to discover MDX files in a section.
-    Returns list of paths that exist.
-    """
-    base = f"{DOCS_BASE}/{section}"
-    found: List[str] = []
+    """Fetch recursive tree for a single section directory."""
+    data = await _fetch_json(session, f"{TREE_URL}/{docs_sha}")
+    entry = next((e for e in data["tree"] if e["path"] == section and e["type"] == "tree"), None)
+    if entry is None:
+        return []
 
-    # Common file patterns in Cloudflare docs
-    candidates = [
-        f"{base}/index.mdx",
-        f"{base}/get-started.mdx",
-        f"{base}/get-started/index.mdx",
-        f"{base}/configuration.mdx",
-        f"{base}/configuration/index.mdx",
-        f"{base}/platform/index.mdx",
-        f"{base}/platform/pricing.mdx",
-        f"{base}/reference/index.mdx",
-        f"{base}/examples/index.mdx",
-        f"{base}/tutorials/index.mdx",
+    section_data = await _fetch_json(
+        session, f"{TREE_URL}/{entry['sha']}", params={"recursive": "1"}
+    )
+    prefix = f"{DOCS_BASE}/{section}/"
+    return sorted(
+        f"{prefix}{node['path']}"
+        for node in section_data.get("tree", [])
+        if node.get("type") == "blob" and node["path"].endswith(".mdx")
+    )
+
+
+async def fetch_sections_individually(session: aiohttp.ClientSession) -> List[str]:
+    """Fallback: discover sections, then fetch each section tree."""
+    logger.info("Falling back to per-section tree fetches …")
+
+    root_sha = await _resolve_tree_sha(session)
+    docs_sha = await _walk_to_subtree(session, root_sha, DOCS_BASE.split("/"))
+
+    # List sections (top-level dirs under DOCS_BASE)
+    docs_tree = await _fetch_json(session, f"{TREE_URL}/{docs_sha}")
+    sections = [
+        e["path"] for e in docs_tree["tree"] if e["type"] == "tree"
     ]
+    logger.info("Found %d sections to scan individually", len(sections))
 
-    sem = asyncio.Semaphore(10)
+    all_files: List[str] = []
+    for i, section in enumerate(sections, 1):
+        logger.info("  [%d/%d] %s", i, len(sections), section)
+        try:
+            files = await _fetch_section_tree(session, docs_sha, section)
+            all_files.extend(files)
+        except Exception as exc:
+            logger.warning("  Skipping section %s: %s", section, exc)
 
-    async def _check(path: str) -> None:
-        async with sem:
-            url = f"{RAW_BASE}/{quote(path, safe='/')}"
-            try:
-                async with session.head(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        found.append(path)
-            except Exception:
-                pass
-
-    await asyncio.gather(*[_check(c) for c in candidates])
-    return found
+    return sorted(all_files)
 
 
-async def discover_via_html_tree(
-    session: aiohttp.ClientSession, section: str
-) -> List[str]:
-    """
-    Discover MDX files by fetching the GitHub tree page for the section.
-    Uses the GitHub HTML tree view which lists all files.
-    """
-    found: List[str] = []
+# ── Grouping ────────────────────────────────────────────────────────────
 
-    # Fetch the GitHub file tree page (HTML)
-    tree_url = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/file-list/{BRANCH}/{DOCS_BASE}/{section}"
-    try:
-        async with session.get(tree_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            if resp.status != 200:
-                return found
-            html = await resp.text()
-    except Exception:
-        return found
-
-    # Extract file paths from the HTML
-    # GitHub file-list page contains file paths in various formats
-    pattern = rf'{DOCS_BASE}/{re.escape(section)}/[^"<>\s]+\.mdx'
-    for m in re.finditer(pattern, html):
-        path = m.group(0)
-        if path not in found:
-            found.append(path)
-
-    return found
+def group_by_section(paths: List[str]) -> Dict[str, List[str]]:
+    """Group file paths by their top-level section directory."""
+    groups: Dict[str, List[str]] = defaultdict(list)
+    for path in paths:
+        section = _section_from_path(path)
+        if section:
+            groups[section].append(path)
+    # Sort keys and values
+    return {k: sorted(v) for k, v in sorted(groups.items())}
 
 
-async def discover_section_files_via_page(
-    session: aiohttp.ClientSession, section: str
-) -> List[str]:
-    """
-    Discover files by parsing the main GitHub tree page for the section.
-    """
-    found: List[str] = []
-    base_path = f"{DOCS_BASE}/{section}"
-
-    # Fetch the tree page
-    url = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/tree/{BRANCH}/{base_path}"
-    try:
-        async with session.get(
-            url,
-            timeout=aiohttp.ClientTimeout(total=30),
-            headers={"Accept": "application/json"},
-        ) as resp:
-            if resp.status != 200:
-                logger.debug("Tree page %s returned %d", url, resp.status)
-                return found
-            data = await resp.json()
-    except Exception as exc:
-        logger.debug("Tree page error %s: %s", url, exc)
-        return found
-
-    # Parse JSON payload
-    items = data.get("payload", {}).get("tree", {}).get("items", [])
-    for item in items:
-        path = item.get("path", "")
-        if path.endswith(".mdx"):
-            found.append(f"{base_path}/{path}" if not path.startswith(base_path) else path)
-
-    return found
-
-
-async def discover_via_index_crawl(
-    session: aiohttp.ClientSession, section: str
-) -> List[str]:
-    """
-    Discover files by reading the index.mdx and following internal links.
-    Then probe discovered paths for more MDX files.
-    """
-    found: List[str] = []
-    base = f"{DOCS_BASE}/{section}"
-
-    # First get the index
-    index_url = f"{RAW_BASE}/{base}/index.mdx"
-    try:
-        async with session.get(index_url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            if resp.status == 200:
-                found.append(f"{base}/index.mdx")
-                content = await resp.text()
-            else:
-                return found
-    except Exception:
-        return found
-
-    # Extract internal links from the MDX content
-    # Look for links like [text](/section/path/) or href="/section/path/"
-    link_pattern = rf'(?:href="|]\()/{re.escape(section)}/([^")\s#]+)'
-    linked_paths = set()
-    for m in re.finditer(link_pattern, content):
-        sub_path = m.group(1).strip("/")
-        if sub_path:
-            linked_paths.add(sub_path)
-
-    # Also look for sidebar config patterns
-    # sidebar entries often reference sub-pages
-    sidebar_pattern = r'(?:slug|link|href):\s*["\']?/?(?:' + re.escape(section) + r')/([^"\')\s#]+)'
-    for m in re.finditer(sidebar_pattern, content):
-        sub_path = m.group(1).strip("/")
-        if sub_path:
-            linked_paths.add(sub_path)
-
-    # Probe each discovered path
-    sem = asyncio.Semaphore(10)
-
-    async def _probe(sub_path: str) -> None:
-        candidates = [
-            f"{base}/{sub_path}/index.mdx",
-            f"{base}/{sub_path}.mdx",
-        ]
-        for candidate in candidates:
-            url = f"{RAW_BASE}/{quote(candidate, safe='/')}"
-            async with sem:
-                try:
-                    async with session.head(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        if resp.status == 200 and candidate not in found:
-                            found.append(candidate)
-                            return
-                except Exception:
-                    pass
-
-    await asyncio.gather(*[_probe(sp) for sp in linked_paths])
-    return found
-
+# ── Main ────────────────────────────────────────────────────────────────
 
 async def build_file_list() -> Dict[str, List[str]]:
     """Build the complete file list for all sections."""
-    result: Dict[str, List[str]] = {}
-
     async with aiohttp.ClientSession() as session:
-        for i, section in enumerate(KNOWN_SECTIONS):
-            logger.info("[%d/%d] Discovering files in %s...", i + 1, len(KNOWN_SECTIONS), section)
+        tree_data = await fetch_full_tree(session)
 
-            # Try multiple discovery methods
-            files = await discover_via_index_crawl(session, section)
-            common = await probe_common_files(session, section)
+        truncated = tree_data.get("truncated", False)
+        tree_nodes = tree_data.get("tree", [])
+        logger.info(
+            "Tree response: %d nodes, truncated=%s", len(tree_nodes), truncated
+        )
 
-            # Merge
-            all_files = list(set(files + common))
-            all_files.sort()
+        if truncated:
+            logger.warning("Tree is truncated – using per-section fallback")
+            mdx_files = await fetch_sections_individually(session)
+        else:
+            mdx_files = extract_mdx_files(tree_nodes)
 
-            if all_files:
-                result[section] = all_files
-                logger.info("  Found %d files in %s", len(all_files), section)
-            else:
-                logger.warning("  No files found in %s", section)
+    result = group_by_section(mdx_files)
 
+    # Statistics
+    total = sum(len(v) for v in result.values())
+    logger.info("Discovery complete: %d .mdx files across %d sections", total, len(result))
+    top5 = sorted(result.items(), key=lambda kv: len(kv[1]), reverse=True)[:5]
+    for section, files in top5:
+        logger.info("  %-30s %d files", section, len(files))
     return result
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Discover all .mdx files in the cloudflare-docs repo via the GitHub API."
+    )
+    parser.add_argument(
+        "--output", "-o",
+        default=OUTPUT_PATH,
+        help=f"Output JSON path (default: {OUTPUT_PATH})",
+    )
+    return parser.parse_args()
+
+
 async def main() -> None:
-    logger.info("Building file list for cloudflare-docs...")
+    args = parse_args()
+    logger.info("Building file list for %s/%s @ %s …", REPO_OWNER, REPO_NAME, BRANCH)
+
     file_list = await build_file_list()
 
     total = sum(len(v) for v in file_list.values())
     logger.info("Total: %d files across %d sections", total, len(file_list))
 
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+    out = args.output
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
         json.dump(file_list, f, indent=2, ensure_ascii=False)
-    logger.info("Saved to %s", OUTPUT_PATH)
+    logger.info("Saved to %s", out)
 
 
 if __name__ == "__main__":
