@@ -554,25 +554,20 @@ _EXTRA_PROTECT_PATTERNS: List[re.Pattern] = [
     re.compile(r"--[\w-]+"),                               # CLI flags --flag-name
 ]
 
-_PH_TEMPLATE = "\u27e60\u27e7"  # ⟦0⟧ – not valid in natural language
-
-
 def _protect_terms(text: str) -> Tuple[str, List[str]]:
     """Replace protected terms / patterns with numbered placeholders."""
     protected: List[str] = []
 
-    def _make_replacer():
-        def _replace(m: re.Match) -> str:
-            idx = len(protected)
-            protected.append(m.group(0))
-            return f"\u27e6{idx}\u27e7"
-        return _replace
+    def _replace(m: re.Match) -> str:
+        idx = len(protected)
+        protected.append(m.group(0))
+        return f"\u27e6{idx}\u27e7"
 
     # 1. Config no-translate terms
-    text = _TERMS_RE.sub(_make_replacer(), text)
+    text = _TERMS_RE.sub(_replace, text)
     # 2. Extra patterns (URLs, paths, versions, env vars, inline code, …)
     for pat in _EXTRA_PROTECT_PATTERNS:
-        text = pat.sub(_make_replacer(), text)
+        text = pat.sub(_replace, text)
     return text, protected
 
 
@@ -815,7 +810,7 @@ def _try_phrase_match(text: str) -> Optional[str]:
     if lower in _PHRASE_LOWER:
         return _PHRASE_LOWER[lower]
     # strip trailing colon / punctuation
-    cleaned = re.sub(r"[:\.\!\?]+$", "", stripped).strip()
+    cleaned = re.sub(r"[:.!?]+$", "", stripped).strip()
     if cleaned.lower() in _PHRASE_LOWER:
         return _PHRASE_LOWER[cleaned.lower()]
     return None
