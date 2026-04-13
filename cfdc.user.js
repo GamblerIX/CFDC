@@ -5,7 +5,7 @@
 // @description  将CloudFlare的Developers文档汉化为中文。
 // @author       GamblerIX
 // @match       https://developers.cloudflare.com/
-// @icon          https://www.google.com/s2/favicons?sz=64&domain=cloudflare.com
+// @icon          https://raw.githubusercontent.com/GamblerIX/CFDC/refs/heads/main/favicon.png
 // @grant        
 // ==/UserScript==
 
