@@ -1,0 +1,842 @@
+{
+  "1.1.1.1": [
+    "src/content/docs/1.1.1.1/additional-options/dns-over-tor.mdx",
+    "src/content/docs/1.1.1.1/encryption/index.mdx",
+    "src/content/docs/1.1.1.1/index.mdx",
+    "src/content/docs/1.1.1.1/setup/index.mdx"
+  ],
+  "agents": [
+    "src/content/docs/agents/api-reference/agents-api.mdx",
+    "src/content/docs/agents/api-reference/browse-the-web.mdx",
+    "src/content/docs/agents/api-reference/chat-agents.mdx",
+    "src/content/docs/agents/api-reference/email.mdx",
+    "src/content/docs/agents/api-reference/http-sse.mdx",
+    "src/content/docs/agents/api-reference/mcp-agent-api.mdx",
+    "src/content/docs/agents/api-reference/run-workflows.mdx",
+    "src/content/docs/agents/api-reference/schedule-tasks.mdx",
+    "src/content/docs/agents/api-reference/store-and-sync-state.mdx",
+    "src/content/docs/agents/api-reference/using-ai-models.mdx",
+    "src/content/docs/agents/api-reference/websockets.mdx",
+    "src/content/docs/agents/concepts/human-in-the-loop.mdx",
+    "src/content/docs/agents/getting-started/add-to-existing-project.mdx",
+    "src/content/docs/agents/getting-started/build-a-chat-agent.mdx",
+    "src/content/docs/agents/getting-started/quick-start.mdx",
+    "src/content/docs/agents/index.mdx",
+    "src/content/docs/agents/platform/index.mdx"
+  ],
+  "ai-crawl-control": [
+    "src/content/docs/ai-crawl-control/configuration/index.mdx",
+    "src/content/docs/ai-crawl-control/features/analyze-ai-traffic.mdx",
+    "src/content/docs/ai-crawl-control/features/manage-ai-crawlers.mdx",
+    "src/content/docs/ai-crawl-control/features/pay-per-crawl/what-is-pay-per-crawl.mdx",
+    "src/content/docs/ai-crawl-control/features/track-robots-txt.mdx",
+    "src/content/docs/ai-crawl-control/get-started.mdx",
+    "src/content/docs/ai-crawl-control/index.mdx",
+    "src/content/docs/ai-crawl-control/reference/index.mdx"
+  ],
+  "ai-gateway": [
+    "src/content/docs/ai-gateway/configuration/index.mdx",
+    "src/content/docs/ai-gateway/features/caching.mdx",
+    "src/content/docs/ai-gateway/features/dynamic-routing/index.mdx",
+    "src/content/docs/ai-gateway/features/rate-limiting.mdx",
+    "src/content/docs/ai-gateway/get-started.mdx",
+    "src/content/docs/ai-gateway/index.mdx",
+    "src/content/docs/ai-gateway/observability/analytics.mdx",
+    "src/content/docs/ai-gateway/observability/logging/index.mdx",
+    "src/content/docs/ai-gateway/reference/index.mdx",
+    "src/content/docs/ai-gateway/tutorials/index.mdx",
+    "src/content/docs/ai-gateway/usage/providers/index.mdx"
+  ],
+  "ai-search": [
+    "src/content/docs/ai-search/configuration/cache.mdx",
+    "src/content/docs/ai-search/configuration/index.mdx",
+    "src/content/docs/ai-search/configuration/indexing.mdx",
+    "src/content/docs/ai-search/get-started/index.mdx",
+    "src/content/docs/ai-search/how-to/multitenancy.mdx",
+    "src/content/docs/ai-search/index.mdx",
+    "src/content/docs/ai-search/platform/index.mdx",
+    "src/content/docs/ai-search/usage/workers-binding.mdx"
+  ],
+  "analytics": [
+    "src/content/docs/analytics/account-and-zone-analytics/index.mdx",
+    "src/content/docs/analytics/analytics-engine/index.mdx",
+    "src/content/docs/analytics/graphql-api/index.mdx",
+    "src/content/docs/analytics/index.mdx",
+    "src/content/docs/analytics/network-analytics/index.mdx",
+    "src/content/docs/analytics/types-of-analytics.mdx"
+  ],
+  "api-shield": [
+    "src/content/docs/api-shield/get-started.mdx",
+    "src/content/docs/api-shield/index.mdx",
+    "src/content/docs/api-shield/management-and-monitoring/index.mdx",
+    "src/content/docs/api-shield/reference/index.mdx",
+    "src/content/docs/api-shield/security/api-discovery.mdx",
+    "src/content/docs/api-shield/security/index.mdx",
+    "src/content/docs/api-shield/security/mtls/index.mdx",
+    "src/content/docs/api-shield/security/schema-validation/index.mdx",
+    "src/content/docs/api-shield/security/sequence-analytics.mdx",
+    "src/content/docs/api-shield/security/volumetric-abuse-detection.mdx"
+  ],
+  "argo-smart-routing": [
+    "src/content/docs/argo-smart-routing/analytics.mdx",
+    "src/content/docs/argo-smart-routing/get-started.mdx",
+    "src/content/docs/argo-smart-routing/index.mdx"
+  ],
+  "automatic-platform-optimization": [
+    "src/content/docs/automatic-platform-optimization/get-started/index.mdx",
+    "src/content/docs/automatic-platform-optimization/index.mdx",
+    "src/content/docs/automatic-platform-optimization/reference/index.mdx"
+  ],
+  "billing": [
+    "src/content/docs/billing/billing-policy.mdx",
+    "src/content/docs/billing/cancel-subscription.mdx",
+    "src/content/docs/billing/index.mdx",
+    "src/content/docs/billing/resolve-cannot-remove-payment-method.mdx",
+    "src/content/docs/billing/resolve-you-cannot-modify-this-subscription.mdx",
+    "src/content/docs/billing/resolve-zone-cannot-be-ugpraded.mdx",
+    "src/content/docs/billing/troubleshoot-failed-payments.mdx",
+    "src/content/docs/billing/update-billing-info.mdx"
+  ],
+  "bots": [
+    "src/content/docs/bots/bot-analytics.mdx",
+    "src/content/docs/bots/get-started/bot-fight-mode.mdx",
+    "src/content/docs/bots/get-started/index.mdx",
+    "src/content/docs/bots/get-started/super-bot-fight-mode.mdx",
+    "src/content/docs/bots/index.mdx",
+    "src/content/docs/bots/plans/index.mdx",
+    "src/content/docs/bots/reference/bot-management-variables.mdx",
+    "src/content/docs/bots/reference/index.mdx"
+  ],
+  "browser-rendering": [
+    "src/content/docs/browser-rendering/cdp/index.mdx",
+    "src/content/docs/browser-rendering/features/reuse-sessions.mdx",
+    "src/content/docs/browser-rendering/get-started.mdx",
+    "src/content/docs/browser-rendering/how-to/browser-rendering-with-do.mdx",
+    "src/content/docs/browser-rendering/index.mdx",
+    "src/content/docs/browser-rendering/limits.mdx",
+    "src/content/docs/browser-rendering/playwright/index.mdx",
+    "src/content/docs/browser-rendering/playwright/playwright-mcp.mdx",
+    "src/content/docs/browser-rendering/pricing.mdx",
+    "src/content/docs/browser-rendering/puppeteer.mdx",
+    "src/content/docs/browser-rendering/quick-actions/crawl-endpoint.mdx",
+    "src/content/docs/browser-rendering/quick-actions/index.mdx",
+    "src/content/docs/browser-rendering/quick-actions/json-endpoint.mdx",
+    "src/content/docs/browser-rendering/quick-actions/links-endpoint.mdx",
+    "src/content/docs/browser-rendering/quick-actions/markdown-endpoint.mdx",
+    "src/content/docs/browser-rendering/quick-actions/pdf-endpoint.mdx",
+    "src/content/docs/browser-rendering/quick-actions/scrape-endpoint.mdx",
+    "src/content/docs/browser-rendering/quick-actions/screenshot-endpoint.mdx",
+    "src/content/docs/browser-rendering/quick-actions/snapshot.mdx",
+    "src/content/docs/browser-rendering/reference/index.mdx",
+    "src/content/docs/browser-rendering/stagehand.mdx"
+  ],
+  "byoip": [
+    "src/content/docs/byoip/address-maps/index.mdx",
+    "src/content/docs/byoip/get-started.mdx",
+    "src/content/docs/byoip/index.mdx",
+    "src/content/docs/byoip/service-bindings/index.mdx"
+  ],
+  "cache": [
+    "src/content/docs/cache/advanced-configuration/cache-reserve.mdx",
+    "src/content/docs/cache/concepts/default-cache-behavior.mdx",
+    "src/content/docs/cache/get-started.mdx",
+    "src/content/docs/cache/how-to/cache-rules/index.mdx",
+    "src/content/docs/cache/how-to/purge-cache/index.mdx",
+    "src/content/docs/cache/how-to/tiered-cache.mdx",
+    "src/content/docs/cache/index.mdx",
+    "src/content/docs/cache/reference/index.mdx"
+  ],
+  "china-network": [
+    "src/content/docs/china-network/concepts/china-dns.mdx",
+    "src/content/docs/china-network/concepts/global-acceleration.mdx",
+    "src/content/docs/china-network/concepts/icp.mdx",
+    "src/content/docs/china-network/get-started.mdx",
+    "src/content/docs/china-network/index.mdx",
+    "src/content/docs/china-network/reference/available-products.mdx",
+    "src/content/docs/china-network/reference/index.mdx"
+  ],
+  "client-ip-geolocation": [
+    "src/content/docs/client-ip-geolocation/about/index.mdx",
+    "src/content/docs/client-ip-geolocation/get-started.mdx",
+    "src/content/docs/client-ip-geolocation/index.mdx"
+  ],
+  "client-side-security": [
+    "src/content/docs/client-side-security/alerts/index.mdx",
+    "src/content/docs/client-side-security/detection/monitor-connections-scripts.mdx",
+    "src/content/docs/client-side-security/detection/review-changed-scripts.mdx",
+    "src/content/docs/client-side-security/detection/review-malicious-scripts.mdx",
+    "src/content/docs/client-side-security/get-started.mdx",
+    "src/content/docs/client-side-security/index.mdx",
+    "src/content/docs/client-side-security/reference/index.mdx",
+    "src/content/docs/client-side-security/rules/index.mdx"
+  ],
+  "cloudflare-agent": [
+    "src/content/docs/cloudflare-agent/index.mdx"
+  ],
+  "cloudflare-challenges": [
+    "src/content/docs/cloudflare-challenges/index.mdx",
+    "src/content/docs/cloudflare-challenges/reference/index.mdx"
+  ],
+  "cloudflare-for-platforms": [
+    "src/content/docs/cloudflare-for-platforms/cloudflare-for-saas/domain-support/index.mdx",
+    "src/content/docs/cloudflare-for-platforms/index.mdx",
+    "src/content/docs/cloudflare-for-platforms/workers-for-platforms/configuration/bindings.mdx",
+    "src/content/docs/cloudflare-for-platforms/workers-for-platforms/configuration/custom-limits.mdx",
+    "src/content/docs/cloudflare-for-platforms/workers-for-platforms/configuration/dynamic-dispatch.mdx",
+    "src/content/docs/cloudflare-for-platforms/workers-for-platforms/configuration/outbound-workers.mdx",
+    "src/content/docs/cloudflare-for-platforms/workers-for-platforms/how-workers-for-platforms-works.mdx",
+    "src/content/docs/cloudflare-for-platforms/workers-for-platforms/reference/worker-isolation.mdx"
+  ],
+  "cloudflare-one": [
+    "src/content/docs/cloudflare-one/access-controls/policies/index.mdx",
+    "src/content/docs/cloudflare-one/account-limits.mdx",
+    "src/content/docs/cloudflare-one/data-loss-prevention/index.mdx",
+    "src/content/docs/cloudflare-one/email-security/index.mdx",
+    "src/content/docs/cloudflare-one/implementation-guides/index.mdx",
+    "src/content/docs/cloudflare-one/index.mdx",
+    "src/content/docs/cloudflare-one/insights/dex/index.mdx",
+    "src/content/docs/cloudflare-one/integrations/cloud-and-saas/index.mdx",
+    "src/content/docs/cloudflare-one/networks/connectors/cloudflare-tunnel/index.mdx",
+    "src/content/docs/cloudflare-one/remote-browser-isolation/index.mdx",
+    "src/content/docs/cloudflare-one/setup/index.mdx",
+    "src/content/docs/cloudflare-one/team-and-resources/devices/cloudflare-one-client/index.mdx",
+    "src/content/docs/cloudflare-one/traffic-policies/index.mdx",
+    "src/content/docs/cloudflare-one/troubleshooting/index.mdx",
+    "src/content/docs/cloudflare-one/tutorials/index.mdx"
+  ],
+  "cloudflare-wan": [
+    "src/content/docs/cloudflare-wan/configuration/index.mdx",
+    "src/content/docs/cloudflare-wan/get-started.mdx",
+    "src/content/docs/cloudflare-wan/index.mdx",
+    "src/content/docs/cloudflare-wan/reference/index.mdx"
+  ],
+  "constellation": [
+    "src/content/docs/constellation/index.mdx",
+    "src/content/docs/constellation/platform/index.mdx"
+  ],
+  "containers": [
+    "src/content/docs/containers/beta-info.mdx",
+    "src/content/docs/containers/examples/index.mdx",
+    "src/content/docs/containers/get-started.mdx",
+    "src/content/docs/containers/index.mdx",
+    "src/content/docs/containers/platform-details/index.mdx",
+    "src/content/docs/containers/ssh.mdx"
+  ],
+  "d1": [
+    "src/content/docs/d1/best-practices/import-export-data.mdx",
+    "src/content/docs/d1/configuration/index.mdx",
+    "src/content/docs/d1/examples/index.mdx",
+    "src/content/docs/d1/get-started.mdx",
+    "src/content/docs/d1/index.mdx",
+    "src/content/docs/d1/platform/index.mdx",
+    "src/content/docs/d1/platform/limits.mdx",
+    "src/content/docs/d1/platform/pricing.mdx",
+    "src/content/docs/d1/reference/community-projects.mdx",
+    "src/content/docs/d1/reference/index.mdx",
+    "src/content/docs/d1/reference/time-travel.mdx",
+    "src/content/docs/d1/sql-api/sql-statements.mdx",
+    "src/content/docs/d1/tutorials/index.mdx",
+    "src/content/docs/d1/worker-api/index.mdx"
+  ],
+  "data-localization": [
+    "src/content/docs/data-localization/geo-key-manager.mdx",
+    "src/content/docs/data-localization/index.mdx",
+    "src/content/docs/data-localization/metadata-boundary/index.mdx",
+    "src/content/docs/data-localization/regional-services/index.mdx"
+  ],
+  "ddos-protection": [
+    "src/content/docs/ddos-protection/advanced-ddos-systems/overview/advanced-dns-protection.mdx",
+    "src/content/docs/ddos-protection/advanced-ddos-systems/overview/advanced-tcp-protection.mdx",
+    "src/content/docs/ddos-protection/advanced-ddos-systems/overview/programmable-flow-protection.mdx",
+    "src/content/docs/ddos-protection/get-started.mdx",
+    "src/content/docs/ddos-protection/index.mdx",
+    "src/content/docs/ddos-protection/managed-rulesets/adaptive-protection.mdx",
+    "src/content/docs/ddos-protection/managed-rulesets/index.mdx",
+    "src/content/docs/ddos-protection/reference/index.mdx"
+  ],
+  "dmarc-management": [
+    "src/content/docs/dmarc-management/index.mdx"
+  ],
+  "dns": [
+    "src/content/docs/dns/cname-flattening/index.mdx",
+    "src/content/docs/dns/dnssec/index.mdx",
+    "src/content/docs/dns/dnssec/multi-signer-dnssec/index.mdx",
+    "src/content/docs/dns/get-started.mdx",
+    "src/content/docs/dns/index.mdx",
+    "src/content/docs/dns/internal-dns/index.mdx",
+    "src/content/docs/dns/manage-dns-records/how-to/create-dns-records.mdx",
+    "src/content/docs/dns/reference/all-features.mdx",
+    "src/content/docs/dns/reference/index.mdx"
+  ],
+  "durable-objects": [
+    "src/content/docs/durable-objects/api/alarms.mdx",
+    "src/content/docs/durable-objects/api/sqlite-storage-api.mdx",
+    "src/content/docs/durable-objects/best-practices/access-durable-objects-storage.mdx",
+    "src/content/docs/durable-objects/best-practices/websockets.mdx",
+    "src/content/docs/durable-objects/concepts/what-are-durable-objects.mdx",
+    "src/content/docs/durable-objects/examples/index.mdx",
+    "src/content/docs/durable-objects/get-started.mdx",
+    "src/content/docs/durable-objects/index.mdx",
+    "src/content/docs/durable-objects/platform/index.mdx",
+    "src/content/docs/durable-objects/platform/limits.mdx",
+    "src/content/docs/durable-objects/platform/pricing.mdx",
+    "src/content/docs/durable-objects/reference/durable-objects-migrations.mdx",
+    "src/content/docs/durable-objects/reference/in-memory-state.mdx",
+    "src/content/docs/durable-objects/reference/index.mdx",
+    "src/content/docs/durable-objects/tutorials/index.mdx"
+  ],
+  "dynamic-workers": [
+    "src/content/docs/dynamic-workers/examples/index.mdx",
+    "src/content/docs/dynamic-workers/index.mdx",
+    "src/content/docs/dynamic-workers/usage/bindings.mdx",
+    "src/content/docs/dynamic-workers/usage/durable-object-facets.mdx",
+    "src/content/docs/dynamic-workers/usage/egress-control.mdx",
+    "src/content/docs/dynamic-workers/usage/observability.mdx"
+  ],
+  "email-routing": [
+    "src/content/docs/email-routing/email-workers/index.mdx",
+    "src/content/docs/email-routing/get-started/email-routing-analytics.mdx",
+    "src/content/docs/email-routing/get-started/enable-email-routing.mdx",
+    "src/content/docs/email-routing/get-started/index.mdx",
+    "src/content/docs/email-routing/index.mdx"
+  ],
+  "email-security": [
+    "src/content/docs/email-security/account-setup/sso/index.mdx",
+    "src/content/docs/email-security/deployment/index.mdx",
+    "src/content/docs/email-security/email-configuration/enhanced-detections/business-email-compromise/index.mdx",
+    "src/content/docs/email-security/index.mdx",
+    "src/content/docs/email-security/reference/index.mdx"
+  ],
+  "firewall": [
+    "src/content/docs/firewall/api/index.mdx",
+    "src/content/docs/firewall/cf-dashboard/create-edit-delete-rules.mdx",
+    "src/content/docs/firewall/cf-firewall-rules/actions.mdx",
+    "src/content/docs/firewall/index.mdx"
+  ],
+  "fundamentals": [
+    "src/content/docs/fundamentals/concepts/index.mdx",
+    "src/content/docs/fundamentals/get-started.mdx",
+    "src/content/docs/fundamentals/index.mdx",
+    "src/content/docs/fundamentals/reference/index.mdx"
+  ],
+  "google-tag-gateway": [
+    "src/content/docs/google-tag-gateway/index.mdx"
+  ],
+  "health-checks": [
+    "src/content/docs/health-checks/get-started.mdx",
+    "src/content/docs/health-checks/health-checks-analytics.mdx",
+    "src/content/docs/health-checks/index.mdx"
+  ],
+  "hyperdrive": [
+    "src/content/docs/hyperdrive/concepts/query-caching.mdx",
+    "src/content/docs/hyperdrive/configuration/index.mdx",
+    "src/content/docs/hyperdrive/examples/connect-to-mysql/index.mdx",
+    "src/content/docs/hyperdrive/examples/connect-to-postgres/index.mdx",
+    "src/content/docs/hyperdrive/examples/index.mdx",
+    "src/content/docs/hyperdrive/get-started.mdx",
+    "src/content/docs/hyperdrive/index.mdx",
+    "src/content/docs/hyperdrive/platform/index.mdx",
+    "src/content/docs/hyperdrive/platform/limits.mdx",
+    "src/content/docs/hyperdrive/platform/pricing.mdx",
+    "src/content/docs/hyperdrive/reference/index.mdx",
+    "src/content/docs/hyperdrive/tutorials/index.mdx"
+  ],
+  "images": [
+    "src/content/docs/images/examples/index.mdx",
+    "src/content/docs/images/get-started.mdx",
+    "src/content/docs/images/index.mdx",
+    "src/content/docs/images/manage-images/serve-images/serve-private-images.mdx",
+    "src/content/docs/images/platform/index.mdx",
+    "src/content/docs/images/pricing.mdx",
+    "src/content/docs/images/reference/index.mdx",
+    "src/content/docs/images/transform-images/index.mdx",
+    "src/content/docs/images/tutorials/index.mdx",
+    "src/content/docs/images/upload-images/direct-creator-upload.mdx",
+    "src/content/docs/images/upload-images/index.mdx"
+  ],
+  "key-transparency": [
+    "src/content/docs/key-transparency/index.mdx"
+  ],
+  "kv": [
+    "src/content/docs/kv/api/read-key-value-pairs.mdx",
+    "src/content/docs/kv/concepts/kv-bindings.mdx",
+    "src/content/docs/kv/examples/index.mdx",
+    "src/content/docs/kv/get-started.mdx",
+    "src/content/docs/kv/index.mdx",
+    "src/content/docs/kv/platform/index.mdx",
+    "src/content/docs/kv/platform/limits.mdx",
+    "src/content/docs/kv/platform/pricing.mdx",
+    "src/content/docs/kv/reference/index.mdx",
+    "src/content/docs/kv/tutorials/index.mdx"
+  ],
+  "load-balancing": [
+    "src/content/docs/load-balancing/additional-options/load-balancing-rules/index.mdx",
+    "src/content/docs/load-balancing/get-started/index.mdx",
+    "src/content/docs/load-balancing/index.mdx",
+    "src/content/docs/load-balancing/load-balancers/index.mdx",
+    "src/content/docs/load-balancing/monitors/index.mdx",
+    "src/content/docs/load-balancing/reference/index.mdx",
+    "src/content/docs/load-balancing/reference/load-balancing-analytics.mdx",
+    "src/content/docs/load-balancing/understand-basics/traffic-steering/index.mdx"
+  ],
+  "log-explorer": [
+    "src/content/docs/log-explorer/api.mdx",
+    "src/content/docs/log-explorer/custom-dashboards.mdx",
+    "src/content/docs/log-explorer/index.mdx",
+    "src/content/docs/log-explorer/log-search.mdx",
+    "src/content/docs/log-explorer/manage-datasets.mdx"
+  ],
+  "logs": [
+    "src/content/docs/logs/index.mdx",
+    "src/content/docs/logs/instant-logs.mdx",
+    "src/content/docs/logs/logpull/index.mdx",
+    "src/content/docs/logs/logpush/index.mdx",
+    "src/content/docs/logs/reference/index.mdx"
+  ],
+  "magic-transit": [
+    "src/content/docs/magic-transit/about.mdx",
+    "src/content/docs/magic-transit/cloudflare-ips.mdx",
+    "src/content/docs/magic-transit/get-started.mdx",
+    "src/content/docs/magic-transit/how-to/configure-routes.mdx",
+    "src/content/docs/magic-transit/index.mdx",
+    "src/content/docs/magic-transit/reference/index.mdx",
+    "src/content/docs/magic-transit/reference/traffic-steering.mdx",
+    "src/content/docs/magic-transit/reference/tunnel-health-checks.mdx"
+  ],
+  "migration-guides": [
+    "src/content/docs/migration-guides/index.mdx"
+  ],
+  "moq": [
+    "src/content/docs/moq/index.mdx"
+  ],
+  "multi-cloud-networking": [
+    "src/content/docs/multi-cloud-networking/cloud-on-ramps.mdx",
+    "src/content/docs/multi-cloud-networking/get-started.mdx",
+    "src/content/docs/multi-cloud-networking/index.mdx"
+  ],
+  "network-error-logging": [
+    "src/content/docs/network-error-logging/get-started.mdx",
+    "src/content/docs/network-error-logging/index.mdx"
+  ],
+  "network-flow": [
+    "src/content/docs/network-flow/get-started.mdx",
+    "src/content/docs/network-flow/index.mdx",
+    "src/content/docs/network-flow/magic-transit-integration.mdx",
+    "src/content/docs/network-flow/network-flow-free.mdx",
+    "src/content/docs/network-flow/rules/index.mdx",
+    "src/content/docs/network-flow/rules/rule-notifications.mdx",
+    "src/content/docs/network-flow/tutorials/index.mdx"
+  ],
+  "network-interconnect": [
+    "src/content/docs/network-interconnect/get-started.mdx",
+    "src/content/docs/network-interconnect/index.mdx"
+  ],
+  "network": [
+    "src/content/docs/network/index.mdx",
+    "src/content/docs/network/ip-geolocation.mdx",
+    "src/content/docs/network/ipv6-compatibility.mdx",
+    "src/content/docs/network/websockets.mdx"
+  ],
+  "notifications": [
+    "src/content/docs/notifications/get-started/configure-pagerduty.mdx",
+    "src/content/docs/notifications/get-started/configure-webhooks.mdx",
+    "src/content/docs/notifications/get-started/index.mdx",
+    "src/content/docs/notifications/index.mdx",
+    "src/content/docs/notifications/reference/index.mdx"
+  ],
+  "pages": [
+    "src/content/docs/pages/configuration/index.mdx",
+    "src/content/docs/pages/configuration/redirects.mdx",
+    "src/content/docs/pages/configuration/rollbacks.mdx",
+    "src/content/docs/pages/framework-guides/index.mdx",
+    "src/content/docs/pages/functions/index.mdx",
+    "src/content/docs/pages/get-started/c3.mdx",
+    "src/content/docs/pages/get-started/direct-upload.mdx",
+    "src/content/docs/pages/get-started/git-integration.mdx",
+    "src/content/docs/pages/get-started/index.mdx",
+    "src/content/docs/pages/index.mdx",
+    "src/content/docs/pages/platform/index.mdx",
+    "src/content/docs/pages/platform/limits.mdx",
+    "src/content/docs/pages/tutorials/index.mdx"
+  ],
+  "pipelines": [
+    "src/content/docs/pipelines/getting-started.mdx",
+    "src/content/docs/pipelines/index.mdx",
+    "src/content/docs/pipelines/pipelines/index.mdx",
+    "src/content/docs/pipelines/platform/index.mdx",
+    "src/content/docs/pipelines/platform/limits.mdx",
+    "src/content/docs/pipelines/platform/pricing.mdx",
+    "src/content/docs/pipelines/reference/index.mdx",
+    "src/content/docs/pipelines/sinks/index.mdx",
+    "src/content/docs/pipelines/streams/index.mdx"
+  ],
+  "privacy-gateway": [
+    "src/content/docs/privacy-gateway/get-started.mdx",
+    "src/content/docs/privacy-gateway/index.mdx",
+    "src/content/docs/privacy-gateway/reference/index.mdx",
+    "src/content/docs/privacy-gateway/reference/legal.mdx",
+    "src/content/docs/privacy-gateway/reference/metrics.mdx"
+  ],
+  "privacy-proxy": [
+    "src/content/docs/privacy-proxy/concepts/authentication.mdx",
+    "src/content/docs/privacy-proxy/concepts/deployment-models.mdx",
+    "src/content/docs/privacy-proxy/concepts/geolocation.mdx",
+    "src/content/docs/privacy-proxy/get-started.mdx",
+    "src/content/docs/privacy-proxy/index.mdx",
+    "src/content/docs/privacy-proxy/reference/index.mdx"
+  ],
+  "pulumi": [
+    "src/content/docs/pulumi/index.mdx"
+  ],
+  "queues": [
+    "src/content/docs/queues/configuration/batching-retries.mdx",
+    "src/content/docs/queues/configuration/configure-queues.mdx",
+    "src/content/docs/queues/configuration/dead-letter-queues.mdx",
+    "src/content/docs/queues/configuration/index.mdx",
+    "src/content/docs/queues/configuration/javascript-apis.mdx",
+    "src/content/docs/queues/configuration/pull-consumers.mdx",
+    "src/content/docs/queues/event-subscriptions/index.mdx",
+    "src/content/docs/queues/examples/index.mdx",
+    "src/content/docs/queues/get-started.mdx",
+    "src/content/docs/queues/index.mdx",
+    "src/content/docs/queues/platform/index.mdx",
+    "src/content/docs/queues/platform/limits.mdx",
+    "src/content/docs/queues/platform/pricing.mdx",
+    "src/content/docs/queues/reference/delivery-guarantees.mdx",
+    "src/content/docs/queues/reference/how-queues-works.mdx",
+    "src/content/docs/queues/reference/index.mdx",
+    "src/content/docs/queues/tutorials/index.mdx"
+  ],
+  "r2-sql": [
+    "src/content/docs/r2-sql/get-started.mdx",
+    "src/content/docs/r2-sql/index.mdx",
+    "src/content/docs/r2-sql/platform/index.mdx",
+    "src/content/docs/r2-sql/platform/pricing.mdx",
+    "src/content/docs/r2-sql/reference/index.mdx",
+    "src/content/docs/r2-sql/tutorials/index.mdx"
+  ],
+  "r2": [
+    "src/content/docs/r2/api/tokens.mdx",
+    "src/content/docs/r2/buckets/cors.mdx",
+    "src/content/docs/r2/buckets/public-buckets.mdx",
+    "src/content/docs/r2/examples/index.mdx",
+    "src/content/docs/r2/get-started/index.mdx",
+    "src/content/docs/r2/index.mdx",
+    "src/content/docs/r2/platform/index.mdx",
+    "src/content/docs/r2/pricing.mdx",
+    "src/content/docs/r2/reference/data-location.mdx",
+    "src/content/docs/r2/reference/index.mdx",
+    "src/content/docs/r2/tutorials/index.mdx"
+  ],
+  "radar": [
+    "src/content/docs/radar/get-started/first-request.mdx",
+    "src/content/docs/radar/get-started/index.mdx",
+    "src/content/docs/radar/get-started/making-comparisons.mdx",
+    "src/content/docs/radar/index.mdx",
+    "src/content/docs/radar/investigate/index.mdx",
+    "src/content/docs/radar/investigate/url-scanner.mdx",
+    "src/content/docs/radar/reference/index.mdx"
+  ],
+  "randomness-beacon": [
+    "src/content/docs/randomness-beacon/index.mdx"
+  ],
+  "realtime": [
+    "src/content/docs/realtime/index.mdx",
+    "src/content/docs/realtime/realtimekit/index.mdx",
+    "src/content/docs/realtime/sfu/index.mdx",
+    "src/content/docs/realtime/turn/index.mdx"
+  ],
+  "reference-architecture": [
+    "src/content/docs/reference-architecture/by-solution.mdx",
+    "src/content/docs/reference-architecture/how-to-use.mdx",
+    "src/content/docs/reference-architecture/index.mdx"
+  ],
+  "registrar": [
+    "src/content/docs/registrar/account-options/renew-domains.mdx",
+    "src/content/docs/registrar/get-started/enable-dnssec.mdx",
+    "src/content/docs/registrar/get-started/index.mdx",
+    "src/content/docs/registrar/get-started/register-domain.mdx",
+    "src/content/docs/registrar/index.mdx"
+  ],
+  "rules": [
+    "src/content/docs/rules/cloud-connector/index.mdx",
+    "src/content/docs/rules/compression-rules/index.mdx",
+    "src/content/docs/rules/configuration-rules/index.mdx",
+    "src/content/docs/rules/custom-errors/index.mdx",
+    "src/content/docs/rules/index.mdx",
+    "src/content/docs/rules/normalization/index.mdx",
+    "src/content/docs/rules/origin-rules/index.mdx",
+    "src/content/docs/rules/page-rules/index.mdx",
+    "src/content/docs/rules/reference/index.mdx",
+    "src/content/docs/rules/snippets/index.mdx",
+    "src/content/docs/rules/transform/index.mdx",
+    "src/content/docs/rules/url-forwarding/index.mdx"
+  ],
+  "ruleset-engine": [
+    "src/content/docs/ruleset-engine/index.mdx",
+    "src/content/docs/ruleset-engine/reference/index.mdx",
+    "src/content/docs/ruleset-engine/reference/phases-list.mdx"
+  ],
+  "sandbox": [
+    "src/content/docs/sandbox/api/index.mdx",
+    "src/content/docs/sandbox/concepts/index.mdx",
+    "src/content/docs/sandbox/configuration/index.mdx",
+    "src/content/docs/sandbox/get-started.mdx",
+    "src/content/docs/sandbox/guides/browser-terminals.mdx",
+    "src/content/docs/sandbox/guides/code-execution.mdx",
+    "src/content/docs/sandbox/guides/execute-commands.mdx",
+    "src/content/docs/sandbox/guides/expose-services.mdx",
+    "src/content/docs/sandbox/guides/file-watching.mdx",
+    "src/content/docs/sandbox/guides/index.mdx",
+    "src/content/docs/sandbox/guides/manage-files.mdx",
+    "src/content/docs/sandbox/guides/mount-buckets.mdx",
+    "src/content/docs/sandbox/guides/proxy-requests.mdx",
+    "src/content/docs/sandbox/guides/websocket-connections.mdx",
+    "src/content/docs/sandbox/index.mdx",
+    "src/content/docs/sandbox/platform/beta-info.mdx",
+    "src/content/docs/sandbox/platform/index.mdx",
+    "src/content/docs/sandbox/platform/limits.mdx",
+    "src/content/docs/sandbox/platform/pricing.mdx",
+    "src/content/docs/sandbox/tutorials/index.mdx"
+  ],
+  "secrets-store": [
+    "src/content/docs/secrets-store/index.mdx",
+    "src/content/docs/secrets-store/integrations/workers.mdx"
+  ],
+  "security-center": [
+    "src/content/docs/security-center/get-started.mdx",
+    "src/content/docs/security-center/index.mdx",
+    "src/content/docs/security-center/security-insights/how-it-works.mdx"
+  ],
+  "security": [
+    "src/content/docs/security/analytics.mdx",
+    "src/content/docs/security/index.mdx",
+    "src/content/docs/security/overview.mdx",
+    "src/content/docs/security/rules.mdx",
+    "src/content/docs/security/web-assets.mdx"
+  ],
+  "smart-shield": [
+    "src/content/docs/smart-shield/concepts/connection-reuse.mdx",
+    "src/content/docs/smart-shield/configuration/index.mdx",
+    "src/content/docs/smart-shield/get-started.mdx",
+    "src/content/docs/smart-shield/index.mdx"
+  ],
+  "spectrum": [
+    "src/content/docs/spectrum/about/ddos-for-spectrum.mdx",
+    "src/content/docs/spectrum/get-started.mdx",
+    "src/content/docs/spectrum/how-to/enable-proxy-protocol.mdx",
+    "src/content/docs/spectrum/index.mdx",
+    "src/content/docs/spectrum/reference/index.mdx"
+  ],
+  "speed": [
+    "src/content/docs/speed/aim.mdx",
+    "src/content/docs/speed/index.mdx",
+    "src/content/docs/speed/observatory/index.mdx",
+    "src/content/docs/speed/observatory/run-speed-test.mdx",
+    "src/content/docs/speed/optimization/index.mdx"
+  ],
+  "ssl": [
+    "src/content/docs/ssl/edge-certificates/additional-options/cipher-suites/customize-cipher-suites/index.mdx",
+    "src/content/docs/ssl/edge-certificates/additional-options/minimum-tls.mdx",
+    "src/content/docs/ssl/edge-certificates/additional-options/total-tls/index.mdx",
+    "src/content/docs/ssl/edge-certificates/changing-dcv-method/methods/delegated-dcv.mdx",
+    "src/content/docs/ssl/edge-certificates/universal-ssl/index.mdx",
+    "src/content/docs/ssl/get-started.mdx",
+    "src/content/docs/ssl/index.mdx",
+    "src/content/docs/ssl/reference/all-features.mdx",
+    "src/content/docs/ssl/reference/index.mdx"
+  ],
+  "stream": [
+    "src/content/docs/stream/examples/index.mdx",
+    "src/content/docs/stream/get-started.mdx",
+    "src/content/docs/stream/getting-analytics/index.mdx",
+    "src/content/docs/stream/index.mdx",
+    "src/content/docs/stream/uploading-videos/direct-creator-uploads.mdx",
+    "src/content/docs/stream/viewing-videos/index.mdx",
+    "src/content/docs/stream/viewing-videos/securing-your-stream.mdx"
+  ],
+  "style-guide": [
+    "src/content/docs/style-guide/contributions.mdx",
+    "src/content/docs/style-guide/index.mdx"
+  ],
+  "support": [
+    "src/content/docs/support/index.mdx"
+  ],
+  "tenant": [
+    "src/content/docs/tenant/get-started.mdx",
+    "src/content/docs/tenant/how-to/index.mdx",
+    "src/content/docs/tenant/index.mdx",
+    "src/content/docs/tenant/reference/index.mdx",
+    "src/content/docs/tenant/structure.mdx"
+  ],
+  "terraform": [
+    "src/content/docs/terraform/index.mdx"
+  ],
+  "time-services": [
+    "src/content/docs/time-services/index.mdx"
+  ],
+  "tunnel": [
+    "src/content/docs/tunnel/configuration.mdx",
+    "src/content/docs/tunnel/index.mdx",
+    "src/content/docs/tunnel/integrations.mdx",
+    "src/content/docs/tunnel/routing.mdx",
+    "src/content/docs/tunnel/setup.mdx",
+    "src/content/docs/tunnel/tutorials/index.mdx"
+  ],
+  "turnstile": [
+    "src/content/docs/turnstile/concepts/widget.mdx",
+    "src/content/docs/turnstile/get-started/index.mdx",
+    "src/content/docs/turnstile/index.mdx",
+    "src/content/docs/turnstile/plans.mdx",
+    "src/content/docs/turnstile/reference/index.mdx",
+    "src/content/docs/turnstile/turnstile-analytics/index.mdx",
+    "src/content/docs/turnstile/tutorials/index.mdx"
+  ],
+  "use-cases": [
+    "src/content/docs/use-cases/ai/index.mdx",
+    "src/content/docs/use-cases/apis/index.mdx",
+    "src/content/docs/use-cases/application-security/index.mdx",
+    "src/content/docs/use-cases/company-security/index.mdx",
+    "src/content/docs/use-cases/e-commerce/index.mdx",
+    "src/content/docs/use-cases/index.mdx",
+    "src/content/docs/use-cases/media-streaming/index.mdx",
+    "src/content/docs/use-cases/performance/index.mdx",
+    "src/content/docs/use-cases/saas/index.mdx",
+    "src/content/docs/use-cases/web-apps/index.mdx"
+  ],
+  "vectorize": [
+    "src/content/docs/vectorize/examples/index.mdx",
+    "src/content/docs/vectorize/get-started/embeddings.mdx",
+    "src/content/docs/vectorize/get-started/index.mdx",
+    "src/content/docs/vectorize/get-started/intro.mdx",
+    "src/content/docs/vectorize/index.mdx",
+    "src/content/docs/vectorize/platform/index.mdx",
+    "src/content/docs/vectorize/platform/limits.mdx",
+    "src/content/docs/vectorize/platform/pricing.mdx",
+    "src/content/docs/vectorize/reference/index.mdx",
+    "src/content/docs/vectorize/tutorials/index.mdx"
+  ],
+  "version-management": [
+    "src/content/docs/version-management/get-started.mdx",
+    "src/content/docs/version-management/how-to/enable.mdx",
+    "src/content/docs/version-management/index.mdx",
+    "src/content/docs/version-management/reference/index.mdx"
+  ],
+  "waf": [
+    "src/content/docs/waf/account/index.mdx",
+    "src/content/docs/waf/analytics/security-analytics.mdx",
+    "src/content/docs/waf/analytics/security-events.mdx",
+    "src/content/docs/waf/change-log/index.mdx",
+    "src/content/docs/waf/custom-rules/index.mdx",
+    "src/content/docs/waf/detections/attack-score.mdx",
+    "src/content/docs/waf/detections/malicious-uploads/index.mdx",
+    "src/content/docs/waf/get-started.mdx",
+    "src/content/docs/waf/index.mdx",
+    "src/content/docs/waf/managed-rules/index.mdx",
+    "src/content/docs/waf/rate-limiting-rules/index.mdx",
+    "src/content/docs/waf/reference/index.mdx"
+  ],
+  "waiting-room": [
+    "src/content/docs/waiting-room/additional-options/create-events.mdx",
+    "src/content/docs/waiting-room/additional-options/waiting-room-rules/index.mdx",
+    "src/content/docs/waiting-room/get-started.mdx",
+    "src/content/docs/waiting-room/how-to/customize-waiting-room.mdx",
+    "src/content/docs/waiting-room/how-to/place-waiting-room.mdx",
+    "src/content/docs/waiting-room/index.mdx",
+    "src/content/docs/waiting-room/plans.mdx",
+    "src/content/docs/waiting-room/reference/configuration-settings.mdx",
+    "src/content/docs/waiting-room/reference/index.mdx",
+    "src/content/docs/waiting-room/reference/waiting-room-cookie.mdx",
+    "src/content/docs/waiting-room/waiting-room-analytics.mdx"
+  ],
+  "warp-client": [
+    "src/content/docs/warp-client/get-started/index.mdx",
+    "src/content/docs/warp-client/index.mdx",
+    "src/content/docs/warp-client/warp-modes.mdx"
+  ],
+  "web-analytics": [
+    "src/content/docs/web-analytics/configuration-options/filters.mdx",
+    "src/content/docs/web-analytics/configuration-options/rules.mdx",
+    "src/content/docs/web-analytics/data-metrics/dimensions.mdx",
+    "src/content/docs/web-analytics/get-started/index.mdx",
+    "src/content/docs/web-analytics/index.mdx"
+  ],
+  "web3": [
+    "src/content/docs/web3/ethereum-gateway/concepts/ethereum.mdx",
+    "src/content/docs/web3/ethereum-gateway/index.mdx",
+    "src/content/docs/web3/get-started.mdx",
+    "src/content/docs/web3/index.mdx",
+    "src/content/docs/web3/ipfs-gateway/concepts/ipfs.mdx",
+    "src/content/docs/web3/ipfs-gateway/index.mdx",
+    "src/content/docs/web3/reference/index.mdx"
+  ],
+  "workers-ai": [
+    "src/content/docs/workers-ai/configuration/index.mdx",
+    "src/content/docs/workers-ai/get-started/index.mdx",
+    "src/content/docs/workers-ai/get-started/workers-wrangler.mdx",
+    "src/content/docs/workers-ai/index.mdx",
+    "src/content/docs/workers-ai/models/index.mdx",
+    "src/content/docs/workers-ai/platform/index.mdx",
+    "src/content/docs/workers-ai/platform/limits.mdx",
+    "src/content/docs/workers-ai/platform/pricing.mdx"
+  ],
+  "workers-vpc": [
+    "src/content/docs/workers-vpc/api/index.mdx",
+    "src/content/docs/workers-vpc/configuration/index.mdx",
+    "src/content/docs/workers-vpc/configuration/vpc-services/index.mdx",
+    "src/content/docs/workers-vpc/examples/index.mdx",
+    "src/content/docs/workers-vpc/get-started.mdx",
+    "src/content/docs/workers-vpc/index.mdx",
+    "src/content/docs/workers-vpc/reference/index.mdx"
+  ],
+  "workers": [
+    "src/content/docs/workers/configuration/cron-triggers.mdx",
+    "src/content/docs/workers/configuration/index.mdx",
+    "src/content/docs/workers/configuration/placement.mdx",
+    "src/content/docs/workers/examples/index.mdx",
+    "src/content/docs/workers/framework-guides/index.mdx",
+    "src/content/docs/workers/framework-guides/web-apps/astro.mdx",
+    "src/content/docs/workers/framework-guides/web-apps/nextjs.mdx",
+    "src/content/docs/workers/framework-guides/web-apps/react-router.mdx",
+    "src/content/docs/workers/framework-guides/web-apps/react.mdx",
+    "src/content/docs/workers/framework-guides/web-apps/sveltekit.mdx",
+    "src/content/docs/workers/framework-guides/web-apps/vue.mdx",
+    "src/content/docs/workers/get-started/guide.mdx",
+    "src/content/docs/workers/get-started/index.mdx",
+    "src/content/docs/workers/index.mdx",
+    "src/content/docs/workers/languages/javascript/index.mdx",
+    "src/content/docs/workers/languages/python/index.mdx",
+    "src/content/docs/workers/languages/rust/index.mdx",
+    "src/content/docs/workers/languages/typescript/index.mdx",
+    "src/content/docs/workers/observability/logs/index.mdx",
+    "src/content/docs/workers/observability/metrics-and-analytics.mdx",
+    "src/content/docs/workers/platform/index.mdx",
+    "src/content/docs/workers/platform/pricing.mdx",
+    "src/content/docs/workers/reference/index.mdx",
+    "src/content/docs/workers/runtime-apis/bindings/index.mdx",
+    "src/content/docs/workers/runtime-apis/webassembly/index.mdx",
+    "src/content/docs/workers/static-assets/index.mdx",
+    "src/content/docs/workers/tutorials/index.mdx"
+  ],
+  "workflows": [
+    "src/content/docs/workflows/build/events-and-parameters.mdx",
+    "src/content/docs/workflows/build/sleeping-and-retrying.mdx",
+    "src/content/docs/workflows/build/trigger-workflows.mdx",
+    "src/content/docs/workflows/build/workers-api.mdx",
+    "src/content/docs/workflows/examples/index.mdx",
+    "src/content/docs/workflows/get-started/guide.mdx",
+    "src/content/docs/workflows/get-started/index.mdx",
+    "src/content/docs/workflows/index.mdx",
+    "src/content/docs/workflows/reference/index.mdx",
+    "src/content/docs/workflows/reference/limits.mdx",
+    "src/content/docs/workflows/reference/pricing.mdx"
+  ],
+  "zaraz": [
+    "src/content/docs/zaraz/advanced/load-custom-managed-component.mdx",
+    "src/content/docs/zaraz/consent-management/index.mdx",
+    "src/content/docs/zaraz/get-started.mdx",
+    "src/content/docs/zaraz/index.mdx",
+    "src/content/docs/zaraz/reference/index.mdx",
+    "src/content/docs/zaraz/web-api/index.mdx"
+  ]
+}
