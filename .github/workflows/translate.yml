@@ -1,0 +1,73 @@
+name: Translate remaining entries
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: 'Number of concurrent translation workers'
+        required: false
+        default: '8'
+      save_interval:
+        description: 'Save cache every N items'
+        required: false
+        default: '500'
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r pythonplaywrightstealth/requirements.txt
+
+      - name: Restore translation cache
+        uses: actions/cache@v4
+        with:
+          path: pythonplaywrightstealth/cache
+          key: translation-cache-${{ github.run_id }}
+          restore-keys: |
+            translation-cache-
+
+      - name: Count remaining entries (before)
+        run: |
+          cd pythonplaywrightstealth
+          python translate_remaining.py --dry-run
+
+      - name: Run resumable translation
+        run: |
+          cd pythonplaywrightstealth
+          python translate_remaining.py \
+            --workers ${{ github.event.inputs.workers || '8' }} \
+            --save-interval ${{ github.event.inputs.save_interval || '500' }}
+
+      - name: Run validation
+        run: |
+          cd pythonplaywrightstealth
+          python validate.py
+
+      - name: Commit translated entries
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add i18n/zh-cn.json
+          if git diff --cached --quiet; then
+            echo "No translation changes to commit"
+          else
+            git commit -m "chore: translate remaining [EN] entries (automated)"
+            git push
+          fi

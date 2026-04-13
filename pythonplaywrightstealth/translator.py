@@ -778,6 +778,7 @@ def _translate_offline(text: str) -> str:
             return result
         # Short text with no match – if it's mostly a protected term, keep it
         if _is_technical(text):
+            _set_cached(text, text)
             return text
         return _passthrough(text, short=True)
 
@@ -788,11 +789,13 @@ def _translate_offline(text: str) -> str:
             _set_cached(text, result)
             return result
         if _is_technical(text):
+            _set_cached(text, text)
             return text
         return _passthrough(text, short=False)
 
     # Long text: never attempt offline, keep English
     if _is_technical(text):
+        _set_cached(text, text)
         return text
     return _passthrough(text, short=False)
 

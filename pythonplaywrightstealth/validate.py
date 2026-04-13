@@ -520,7 +520,7 @@ def main() -> None:
     # ── Output ──────────────────────────────────────────────────────────
     print_report(report, verbose=args.verbose)
 
-    report_path = os.path.join(config.PROJECT_ROOT, "cache", "validation_report.json")
+    report_path = os.path.join(SCRIPT_DIR, "cache", "validation_report.json")
     save_json(report, report_path)
     logger.info("Detailed JSON report saved to %s", report_path)
 
