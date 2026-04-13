@@ -11,9 +11,10 @@ on:
         description: 'Save cache every N items'
         required: false
         default: '500'
-  schedule:
-    # Run daily at 02:00 UTC
-    - cron: '0 2 * * *'
+      max_runtime_minutes:
+        description: 'Max translation runtime in minutes (default 300, set 0 to disable)'
+        required: false
+        default: '300'
 
 permissions:
   contents: write
@@ -52,8 +53,9 @@ jobs:
         run: |
           cd pythonplaywrightstealth
           python translate_remaining.py \
-            --workers ${{ github.event.inputs.workers || '8' }} \
-            --save-interval ${{ github.event.inputs.save_interval || '500' }}
+            --workers "${{ github.event.inputs.workers || '8' }}" \
+            --save-interval "${{ github.event.inputs.save_interval || '500' }}" \
+            --max-runtime-minutes "${{ github.event.inputs.max_runtime_minutes || '300' }}"
 
       - name: Run validation
         run: |
