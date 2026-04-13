@@ -18,7 +18,7 @@ import re
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, CancelledError, ThreadPoolExecutor, wait
 from typing import Any, Dict, List, Optional, Tuple
 
 import config
@@ -190,6 +190,12 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8, help="Concurrent workers")
     parser.add_argument("--dry-run", action="store_true", help="Count entries without translating")
     parser.add_argument("--save-interval", type=int, default=500, help="Save cache every N items")
+    parser.add_argument(
+        "--max-runtime-minutes",
+        type=float,
+        default=300,
+        help="Max runtime in minutes for translation stage (default: 300, set 0 to disable)",
+    )
     args = parser.parse_args()
 
     logger.info("Loading zh-cn.json …")
@@ -220,26 +226,62 @@ def main() -> None:
         done = 0
         failed = 0
         start_time = time.time()
+        deadline = None
+        if args.max_runtime_minutes > 0:
+            deadline = start_time + args.max_runtime_minutes * 60
+            logger.info(
+                "Max translation runtime set to %.1f minutes",
+                args.max_runtime_minutes,
+            )
+        else:
+            logger.info("Max translation runtime disabled")
+        timeout_reached = False
 
-        with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(_worker, t): t for t in uncached}
-            for future in as_completed(futures):
-                text, result = future.result()
-                done += 1
-                if result is None:
-                    failed += 1
+        pool = ThreadPoolExecutor(max_workers=args.workers)
+        try:
+            pending = {pool.submit(_worker, t) for t in uncached}
 
-                if done % 200 == 0 or done == len(uncached):
-                    elapsed = time.time() - start_time
-                    rate = done / elapsed if elapsed > 0 else 0
-                    eta = (len(uncached) - done) / rate if rate > 0 else 0
-                    logger.info(
-                        "Progress: %d/%d (%.1f/s, failed: %d, ETA: %.0fm)",
-                        done, len(uncached), rate, failed, eta / 60,
+            while pending:
+                if deadline is not None and time.time() >= deadline:
+                    timeout_reached = True
+                    logger.warning(
+                        "Reached max runtime (%.1f minutes); stopping translation early.",
+                        args.max_runtime_minutes,
                     )
+                    for future in pending:
+                        future.cancel()
+                    break
 
-                if done % args.save_interval == 0:
-                    save_cache()
+                completed, pending = wait(
+                    pending,
+                    timeout=1,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not completed:
+                    continue
+
+                for future in completed:
+                    try:
+                        _, result = future.result()
+                    except CancelledError:
+                        continue
+                    done += 1
+                    if result is None:
+                        failed += 1
+
+                    if done % 200 == 0 or done == len(uncached):
+                        elapsed = time.time() - start_time
+                        rate = done / elapsed if elapsed > 0 else 0
+                        eta = (len(uncached) - done) / rate if rate > 0 else 0
+                        logger.info(
+                            "Progress: %d/%d (%.1f/s, failed: %d, ETA: %.0fm)",
+                            done, len(uncached), rate, failed, eta / 60,
+                        )
+
+                    if done % args.save_interval == 0:
+                        save_cache()
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
         save_cache()
         elapsed = time.time() - start_time
@@ -247,6 +289,8 @@ def main() -> None:
             "Done: %d translated, %d failed in %.1fs (%.1f/s)",
             done - failed, failed, elapsed, done / elapsed if elapsed > 0 else 0,
         )
+        if timeout_reached:
+            logger.info("Partial results were saved and will be applied.")
 
     # Apply translations
     applied = 0
