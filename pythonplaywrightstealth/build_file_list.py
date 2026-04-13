@@ -254,7 +254,9 @@ async def main() -> None:
     logger.info("Total: %d files across %d sections", total, len(file_list))
 
     out = args.output
-    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    out_dir = os.path.dirname(os.path.abspath(out))
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(file_list, f, indent=2, ensure_ascii=False)
     logger.info("Saved to %s", out)
