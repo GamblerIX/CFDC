@@ -17,9 +17,11 @@ from urllib.parse import urljoin, urlparse
 import aiohttp
 from lxml import etree
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async  # type: ignore[import-untyped]
+from playwright_stealth import Stealth  # type: ignore[import-untyped]
 
 import config
+
+stealth = Stealth()
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +95,8 @@ async def bfs_crawl_urls(
                 "Chrome/124.0.0.0 Safari/537.36"
             )
         )
+        await stealth.apply_stealth_async(context)
         page = await context.new_page()
-        await stealth_async(page)
 
         while queue:
             if 0 < max_pages <= len(visited):

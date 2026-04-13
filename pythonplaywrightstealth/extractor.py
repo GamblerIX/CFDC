@@ -12,9 +12,11 @@ from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 from playwright.async_api import Page, async_playwright
-from playwright_stealth import stealth_async  # type: ignore[import-untyped]
+from playwright_stealth import Stealth  # type: ignore[import-untyped]
 
 import config
+
+stealth = Stealth()
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +107,7 @@ async def extract_all(urls: List[str]) -> Dict[str, Dict[str, Any]]:
                 "Chrome/124.0.0.0 Safari/537.36"
             )
         )
+        await stealth.apply_stealth_async(context)
 
         # Process in batches with concurrency
         sem = asyncio.Semaphore(config.CONCURRENCY)
@@ -112,7 +115,6 @@ async def extract_all(urls: List[str]) -> Dict[str, Dict[str, Any]]:
         async def _process(url: str) -> None:
             async with sem:
                 p = await context.new_page()
-                await stealth_async(p)
                 try:
                     entries = await extract_page_entries(p, url)
                     path = urlparse(url).path
