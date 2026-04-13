@@ -1,30 +1,35 @@
 """
 translator.py – Translate extracted English entries to Chinese.
 
-Supports multiple backends:
-1. Offline dictionary + pattern-based translation (always available)
-2. deep-translator / Google Translate (when network is available)
-3. argos-translate (when installed with model downloaded)
+Translation backends in priority order:
+1. **Online** – Google Translate via deep-translator (best quality, needs network)
+2. **Offline phrase-based** – exact / substring matching from PHRASE_DICT
+3. **Passthrough** – keeps the English original rather than producing mixed garbage
 
-The offline translator uses a comprehensive technical dictionary optimized
-for Cloudflare developer documentation.
+Core principle: never mix Chinese and English words in the same sentence.
+If a sentence cannot be fully translated offline, keep the English original
+(optionally prefixed with "[EN] ") instead of doing word-by-word replacement.
 """
 
+import hashlib
+import json
 import logging
+import os
 import re
 import time
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import config
 
 logger = logging.getLogger(__name__)
 
-# ─── Comprehensive Translation Dictionary ───────────────────────────────────
-# Common phrases and terms found in Cloudflare developer documentation.
-# This dictionary is used for offline translation when no API is available.
+# ─── Phrase dictionary ──────────────────────────────────────────────────────
+# Used for exact-match and substring-match of short labels / known phrases.
+# Intentionally does NOT include a word-level dictionary – word-by-word
+# replacement is the root cause of gibberish mixed-language output.
 
 PHRASE_DICT: Dict[str, str] = {
-    # ── Common UI & documentation phrases ────────────────────────────────
+    # ── Navigation & UI labels ───────────────────────────────────────────
     "Get started": "快速开始",
     "Getting started": "快速开始",
     "Overview": "概述",
@@ -139,8 +144,45 @@ PHRASE_DICT: Dict[str, str] = {
     "Delete": "删除",
     "List": "列表",
     "Get": "获取",
+    "Manage": "管理",
+    "Configure": "配置",
+    "Enable": "启用",
+    "Disable": "禁用",
+    "Connect": "连接",
+    "Disconnect": "断开连接",
+    "Upload": "上传",
+    "Download": "下载",
+    "Import": "导入",
+    "Export": "导出",
+    "Publish": "发布",
+    "Preview": "预览",
+    "Save": "保存",
+    "Cancel": "取消",
+    "Confirm": "确认",
+    "Submit": "提交",
+    "Reset": "重置",
+    "Retry": "重试",
+    "Back": "返回",
+    "Next": "下一步",
+    "Previous": "上一步",
+    "Close": "关闭",
+    "Open": "打开",
+    "Edit": "编辑",
+    "Copy": "复制",
+    "Paste": "粘贴",
+    "Select": "选择",
+    "Remove": "移除",
+    "Add": "添加",
+    "View": "查看",
+    "Show": "显示",
+    "Hide": "隐藏",
+    "Expand": "展开",
+    "Collapse": "折叠",
+    "Refresh": "刷新",
+    "Loading": "加载中",
+    "Saving": "保存中",
 
-    # ── Cloudflare-specific terms ────────────────────────────────────────
+    # ── Cloudflare-specific technical terms ───────────────────────────────
     "serverless": "无服务器",
     "edge computing": "边缘计算",
     "edge network": "边缘网络",
@@ -289,7 +331,7 @@ PHRASE_DICT: Dict[str, str] = {
     "warning": "警告",
     "info": "信息",
 
-    # ── Sentences commonly found in Cloudflare docs ──────────────────────
+    # ── Sentences / multi-word phrases common in Cloudflare docs ──────────
     "Related products": "相关产品",
     "What you will learn": "您将学到什么",
     "Before you begin": "开始之前",
@@ -313,387 +355,564 @@ PHRASE_DICT: Dict[str, str] = {
     "Enterprise plan": "企业计划",
     "Paid plans": "付费计划",
     "All plans": "所有计划",
+    "Workers plan": "Workers 计划",
+    "Select a plan": "选择计划",
+    "Compare plans": "比较计划",
+    "View plans": "查看计划",
+    "Explore plans": "探索计划",
+    "In this article": "本文内容",
+    "On this page": "本页内容",
+    "Table of contents": "目录",
+    "Was this helpful?": "这对您有帮助吗？",
+    "Last updated": "最后更新",
+    "Edit this page": "编辑此页",
+    "Report an issue": "报告问题",
+    "View source": "查看源码",
+    "External link": "外部链接",
+    "Internal link": "内部链接",
+    "Permalink": "永久链接",
+    "Share": "分享",
+    "Print": "打印",
+    "Copied": "已复制",
+    "Copy to clipboard": "复制到剪贴板",
+    "Click to copy": "点击复制",
+    "Toggle navigation": "切换导航",
+    "Skip to content": "跳到内容",
+    "Scroll to top": "回到顶部",
+    "Show more": "显示更多",
+    "Show less": "收起",
+    "Load more": "加载更多",
+    "See all": "查看全部",
+    "View all": "查看全部",
+    "Clear all": "全部清除",
+    "Select all": "全选",
+    "No results found": "未找到结果",
+    "No results": "无结果",
+    "Try again": "重试",
+    "Something went wrong": "出错了",
+    "Page not found": "页面未找到",
+    "Access denied": "拒绝访问",
+    "Permission denied": "权限被拒绝",
+    "Not available": "不可用",
+    "Coming soon": "即将推出",
+    "Under construction": "建设中",
+    "Work in progress": "进行中",
+    "Stay tuned": "敬请期待",
+    "Thank you": "谢谢",
+    "Welcome": "欢迎",
+    "Hello": "你好",
+    "Good morning": "早上好",
+    "Home": "首页",
+    "Menu": "菜单",
+    "Sidebar": "侧边栏",
+    "Footer": "页脚",
+    "Header": "页眉",
+    "Navigation": "导航",
+    "Breadcrumb": "面包屑导航",
+    "Tab": "选项卡",
+    "Tabs": "选项卡",
+    "Panel": "面板",
+    "Modal": "模态框",
+    "Dialog": "对话框",
+    "Tooltip": "工具提示",
+    "Dropdown": "下拉菜单",
+    "Toggle": "切换",
+    "Switch": "开关",
+    "Checkbox": "复选框",
+    "Radio": "单选",
+    "Input": "输入",
+    "Output": "输出",
+    "Form": "表单",
+    "Button": "按钮",
+    "Link": "链接",
+    "Icon": "图标",
+    "Badge": "徽章",
+    "Banner": "横幅",
+    "Card": "卡片",
+    "Snippet": "代码片段",
+    "Code block": "代码块",
+    "Inline code": "行内代码",
+    "Syntax highlighting": "语法高亮",
+    "Dark mode": "深色模式",
+    "Light mode": "浅色模式",
+    "Theme": "主题",
+    "Language": "语言",
+    "Version": "版本",
+    "Versions": "版本",
+
+    # ── Common Cloudflare doc headings and phrases ────────────────────────
+    "Workers documentation": "Workers 文档",
+    "Pages documentation": "Pages 文档",
+    "R2 documentation": "R2 文档",
+    "D1 documentation": "D1 文档",
+    "KV documentation": "KV 文档",
+    "Durable Objects documentation": "Durable Objects 文档",
+    "Hyperdrive documentation": "Hyperdrive 文档",
+    "Queues documentation": "Queues 文档",
+    "API Shield": "API Shield",
+    "Bot Management": "Bot Management",
+    "Page Shield": "Page Shield",
+    "Cloudflare Radar": "Cloudflare Radar",
+    "Speed": "速度",
+    "Caching": "缓存",
+    "Rules": "规则",
+    "Transform Rules": "转换规则",
+    "Page Rules": "页面规则",
+    "Firewall rules": "防火墙规则",
+    "WAF rules": "WAF 规则",
+    "Rate limiting rules": "速率限制规则",
+    "Custom rules": "自定义规则",
+    "Managed rules": "托管规则",
+    "Configuration rules": "配置规则",
+    "Origin rules": "源规则",
+    "Redirect rules": "重定向规则",
+    "Bulk redirects": "批量重定向",
+    "DNS records": "DNS 记录",
+    "SSL certificates": "SSL 证书",
+    "Edge certificates": "边缘证书",
+    "Origin certificates": "源证书",
+    "Client certificates": "客户端证书",
+    "Custom certificates": "自定义证书",
+    "Total TLS": "Total TLS",
+    "Universal SSL": "Universal SSL",
+    "Advanced certificates": "高级证书",
+    "Access policies": "Access 策略",
+    "Access groups": "Access 组",
+    "Access applications": "Access 应用",
+    "Service tokens": "服务令牌",
+    "API tokens": "API 令牌",
+    "API keys": "API 密钥",
+    "Audit logs": "审计日志",
+    "Account members": "账户成员",
+    "Notifications and alerts": "通知和告警",
+    "Wrangler commands": "Wrangler 命令",
+    "Smart placement": "智能放置",
+    "Tail Workers": "Tail Workers",
+    "Cron Triggers": "定时触发器",
+    "Custom Domains": "自定义域名",
+    "Environment variables and secrets": "环境变量和密钥",
+    "Source code": "源代码",
+    "Sample code": "示例代码",
+    "Code example": "代码示例",
+    "Code examples": "代码示例",
+    "Full example": "完整示例",
+    "Starter template": "入门模板",
+    "Starter templates": "入门模板",
+    "Template": "模板",
+    "Templates": "模板",
+    "Playground": "在线演练场",
+    "Quick edit": "快速编辑",
+    "Local development": "本地开发",
+    "Remote development": "远程开发",
+    "Continuous integration": "持续集成",
+    "Continuous deployment": "持续部署",
+    "Git integration": "Git 集成",
+    "Branch deployments": "分支部署",
+    "Preview deployments": "预览部署",
+    "Production deployments": "生产部署",
+    "Build configuration": "构建配置",
+    "Build commands": "构建命令",
+    "Build output": "构建输出",
+    "Framework guide": "框架指南",
+    "Framework guides": "框架指南",
+    "Functions": "函数",
+    "Bindings": "绑定",
+    "Static assets": "静态资源",
+    "Dynamic content": "动态内容",
+    "Server-side rendering": "服务端渲染",
+    "Single-page application": "单页应用",
+    "Static site": "静态站点",
+    "Full-stack": "全栈",
+    "Jamstack": "Jamstack",
 }
 
-# ── Word-level dictionary for composing translations ─────────────────────────
-WORD_DICT: Dict[str, str] = {
-    "a": "一个",
-    "the": "",
-    "is": "是",
-    "are": "是",
-    "was": "是",
-    "were": "是",
-    "be": "是",
-    "been": "已经",
-    "being": "正在",
-    "have": "有",
-    "has": "有",
-    "had": "有",
-    "do": "做",
-    "does": "做",
-    "did": "做",
-    "will": "将",
-    "would": "将会",
-    "shall": "应该",
-    "should": "应该",
-    "may": "可以",
-    "might": "可能",
-    "must": "必须",
-    "can": "可以",
-    "could": "可以",
-    "need": "需要",
-    "needs": "需要",
-    "want": "想要",
-    "use": "使用",
-    "used": "使用",
-    "using": "使用",
-    "allow": "允许",
-    "allows": "允许",
-    "enable": "启用",
-    "enables": "启用",
-    "disable": "禁用",
-    "disables": "禁用",
-    "provide": "提供",
-    "provides": "提供",
-    "support": "支持",
-    "supports": "支持",
-    "include": "包括",
-    "includes": "包括",
-    "require": "需要",
-    "requires": "需要",
-    "configure": "配置",
-    "manage": "管理",
-    "connect": "连接",
-    "run": "运行",
-    "running": "运行",
-    "start": "启动",
-    "stop": "停止",
-    "send": "发送",
-    "receive": "接收",
-    "read": "读取",
-    "write": "写入",
-    "access": "访问",
-    "protect": "保护",
-    "secure": "安全的",
-    "available": "可用的",
-    "your": "您的",
-    "you": "您",
-    "this": "此",
-    "that": "那个",
-    "these": "这些",
-    "those": "那些",
-    "all": "所有",
-    "any": "任何",
-    "each": "每个",
-    "every": "每个",
-    "other": "其他",
-    "more": "更多",
-    "most": "最",
-    "some": "一些",
-    "many": "许多",
-    "few": "少数",
-    "no": "没有",
-    "not": "不",
-    "only": "仅",
-    "also": "也",
-    "very": "非常",
-    "just": "只是",
-    "about": "关于",
-    "with": "与",
-    "without": "没有",
-    "from": "从",
-    "into": "到",
-    "through": "通过",
-    "between": "之间",
-    "before": "之前",
-    "after": "之后",
-    "during": "期间",
-    "while": "当",
-    "when": "当",
-    "where": "在哪里",
-    "how": "如何",
-    "what": "什么",
-    "which": "哪个",
-    "who": "谁",
-    "why": "为什么",
-    "if": "如果",
-    "then": "然后",
-    "else": "否则",
-    "and": "和",
-    "or": "或",
-    "but": "但是",
-    "for": "用于",
-    "on": "在",
-    "in": "在",
-    "at": "在",
-    "to": "到",
-    "of": "的",
-    "by": "通过",
-    "as": "作为",
-    "an": "一个",
-    "application": "应用程序",
-    "applications": "应用程序",
-    "app": "应用",
-    "apps": "应用",
-    "server": "服务器",
-    "servers": "服务器",
-    "client": "客户端",
-    "clients": "客户端",
-    "user": "用户",
-    "users": "用户",
-    "developer": "开发者",
-    "developers": "开发者",
-    "network": "网络",
-    "networks": "网络",
-    "traffic": "流量",
-    "data": "数据",
-    "file": "文件",
-    "files": "文件",
-    "page": "页面",
-    "pages": "页面",
-    "site": "站点",
-    "sites": "站点",
-    "website": "网站",
-    "websites": "网站",
-    "service": "服务",
-    "services": "服务",
-    "feature": "功能",
-    "features": "功能",
-    "option": "选项",
-    "options": "选项",
-    "setting": "设置",
-    "settings": "设置",
-    "configuration": "配置",
-    "command": "命令",
-    "commands": "命令",
-    "code": "代码",
-    "script": "脚本",
-    "project": "项目",
-    "environment": "环境",
-    "production": "生产",
-    "staging": "暂存",
-    "development": "开发",
-    "local": "本地",
-    "remote": "远程",
-    "global": "全局",
-    "public": "公共",
-    "private": "私有",
-    "internal": "内部",
-    "external": "外部",
-    "custom": "自定义",
-    "static": "静态",
-    "dynamic": "动态",
-    "real-time": "实时",
-    "automatic": "自动",
-    "manual": "手动",
-    "advanced": "高级",
-    "basic": "基础",
-    "simple": "简单",
-    "complex": "复杂",
-    "full": "完整",
-    "partial": "部分",
-    "complete": "完成",
-    "empty": "空",
-    "new": "新",
-    "old": "旧",
-    "existing": "现有",
-    "current": "当前",
-    "previous": "之前",
-    "next": "下一个",
-    "first": "第一个",
-    "last": "最后",
-    "single": "单个",
-    "multiple": "多个",
-    "maximum": "最大",
-    "minimum": "最小",
-    "large": "大",
-    "small": "小",
-    "high": "高",
-    "low": "低",
-    "fast": "快速",
-    "slow": "慢",
-    "open": "打开",
-    "close": "关闭",
-    "free": "免费",
-    "paid": "付费",
-    "plan": "计划",
-    "plans": "计划",
-    "account": "账户",
-    "team": "团队",
-    "organization": "组织",
-    "member": "成员",
-    "members": "成员",
-    "role": "角色",
-    "permission": "权限",
-    "owner": "所有者",
-    "admin": "管理员",
-    "administrator": "管理员",
-    "region": "区域",
-    "location": "位置",
-    "country": "国家",
-    "version": "版本",
-    "release": "发布",
-    "branch": "分支",
-    "commit": "提交",
-    "deploy": "部署",
-    "build": "构建",
-    "preview": "预览",
-    "live": "正式",
-    "name": "名称",
-    "description": "描述",
-    "title": "标题",
-    "label": "标签",
-    "tag": "标签",
-    "tags": "标签",
-    "category": "类别",
-    "status": "状态",
-    "state": "状态",
-    "mode": "模式",
-    "level": "级别",
-    "size": "大小",
-    "count": "计数",
-    "limit": "限制",
-    "rate": "速率",
-    "cost": "成本",
-    "price": "价格",
-    "storage": "存储",
-    "memory": "内存",
-    "compute": "计算",
-    "cpu": "CPU",
-    "connection": "连接",
-    "connections": "连接",
-    "port": "端口",
-    "address": "地址",
-    "ip address": "IP 地址",
-    "url": "URL",
-    "path": "路径",
-    "method": "方法",
-    "format": "格式",
-    "content": "内容",
-    "text": "文本",
-    "image": "图片",
-    "video": "视频",
-    "audio": "音频",
-    "media": "媒体",
-    "email": "邮箱",
-    "notification": "通知",
-    "alert": "告警",
-    "log": "日志",
-    "metric": "指标",
-    "trace": "跟踪",
-    "span": "跨度",
-    "sample": "样本",
-    "interval": "间隔",
-    "duration": "持续时间",
-    "timestamp": "时间戳",
-    "date": "日期",
-    "time": "时间",
-    "minute": "分钟",
-    "minutes": "分钟",
-    "hour": "小时",
-    "hours": "小时",
-    "day": "天",
-    "days": "天",
-    "week": "周",
-    "month": "月",
-    "year": "年",
-    "second": "秒",
-    "seconds": "秒",
-    "millisecond": "毫秒",
-    "byte": "字节",
-    "bytes": "字节",
-    "kilobyte": "千字节",
-    "megabyte": "兆字节",
-    "gigabyte": "千兆字节",
-}
+# Build a case-insensitive lookup for PHRASE_DICT (lowered key → translation)
+_PHRASE_LOWER: Dict[str, str] = {k.lower(): v for k, v in PHRASE_DICT.items()}
 
-# Compiled regex for protecting no-translate terms
-_PROTECT_RE = re.compile(
-    r"\b(" + "|".join(re.escape(t) for t in sorted(config.NO_TRANSLATE_TERMS, key=len, reverse=True)) + r")\b",
+# ─── Term protection ────────────────────────────────────────────────────────
+# Patterns that should never be translated: product names from config,
+# URLs, file paths, version numbers, env-var names, inline code, etc.
+
+# Build regex for config.NO_TRANSLATE_TERMS (longest first for greedy match)
+_NO_TRANSLATE_SORTED = sorted(
+    config.NO_TRANSLATE_TERMS, key=len, reverse=True
+)
+_TERMS_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(t) for t in _NO_TRANSLATE_SORTED) + r")\b",
     re.IGNORECASE,
 )
 
-_PH_TEMPLATE = "⟦{}⟧"
+# Additional patterns to protect from translation
+_EXTRA_PROTECT_PATTERNS: List[re.Pattern] = [
+    re.compile(r"https?://\S+"),                          # URLs
+    re.compile(r"(?<!\w)/[\w./_-]+"),                     # file paths like /etc/resolv.conf
+    re.compile(r"\b\w+\.\w+\.\w[\w.]*\b"),               # dotted identifiers: wrangler.toml, crypto.subtle
+    re.compile(r"\bv?\d+\.\d+(?:\.\d+)(?:[-+]\S+)?\b"),  # version numbers: v1.2.3, 2.0.0-beta
+    re.compile(r"\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b"),    # ENV_VAR_NAMES
+    re.compile(r"`[^`]+`"),                                # inline code
+    re.compile(r"\{[^}]+\}"),                              # template expressions {variable}
+    re.compile(r"--[\w-]+"),                               # CLI flags --flag-name
+]
+
+_PH_TEMPLATE = "\u27e60\u27e7"  # ⟦0⟧ – not valid in natural language
 
 
-def _protect_terms(text: str) -> tuple[str, list[str]]:
-    """Replace protected terms with numbered placeholders."""
-    protected: list[str] = []
+def _protect_terms(text: str) -> Tuple[str, List[str]]:
+    """Replace protected terms / patterns with numbered placeholders."""
+    protected: List[str] = []
 
-    def _replace(m: re.Match) -> str:
-        idx = len(protected)
-        protected.append(m.group(0))
-        return _PH_TEMPLATE.format(idx)
+    def _make_replacer():
+        def _replace(m: re.Match) -> str:
+            idx = len(protected)
+            protected.append(m.group(0))
+            return f"\u27e6{idx}\u27e7"
+        return _replace
 
-    return _PROTECT_RE.sub(_replace, text), protected
+    # 1. Config no-translate terms
+    text = _TERMS_RE.sub(_make_replacer(), text)
+    # 2. Extra patterns (URLs, paths, versions, env vars, inline code, …)
+    for pat in _EXTRA_PROTECT_PATTERNS:
+        text = pat.sub(_make_replacer(), text)
+    return text, protected
 
 
-def _restore_terms(text: str, protected: list[str]) -> str:
-    """Restore protected terms from placeholders."""
+def _restore_terms(text: str, protected: List[str]) -> str:
+    """Restore placeholders back to original terms."""
     for idx, term in enumerate(protected):
-        placeholder = _PH_TEMPLATE.format(idx)
-        text = text.replace(placeholder, term)
+        text = text.replace(f"\u27e6{idx}\u27e7", term)
     return text
 
 
-def _translate_offline(text: str) -> str:
+def _has_placeholder_artifacts(text: str) -> bool:
+    """Check whether any placeholder markers leaked into the output."""
+    return bool(re.search(r"\u27e6\d+\u27e7", text))
+
+
+# ─── Translation cache ──────────────────────────────────────────────────────
+
+_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
+_CACHE_PATH = os.path.join(_CACHE_DIR, "translation_cache.json")
+
+_translation_cache: Dict[str, str] = {}
+
+
+def _cache_key(text: str) -> str:
+    """Return a cache key: short texts verbatim, long texts as sha256."""
+    if len(text) <= 200:
+        return text
+    return "sha256:" + hashlib.sha256(text.encode()).hexdigest()
+
+
+def _load_cache() -> None:
+    global _translation_cache
+    if os.path.isfile(_CACHE_PATH):
+        try:
+            with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+                _translation_cache = json.load(f)
+            logger.info("Loaded translation cache (%d entries)", len(_translation_cache))
+        except Exception as exc:
+            logger.warning("Failed to load translation cache: %s", exc)
+            _translation_cache = {}
+    else:
+        _translation_cache = {}
+
+
+def _save_cache() -> None:
+    try:
+        os.makedirs(_CACHE_DIR, exist_ok=True)
+        with open(_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(_translation_cache, f, indent=2, ensure_ascii=False)
+    except Exception as exc:
+        logger.warning("Failed to save translation cache: %s", exc)
+
+
+def _get_cached(text: str) -> Optional[str]:
+    return _translation_cache.get(_cache_key(text))
+
+
+def _set_cached(text: str, translation: str) -> None:
+    _translation_cache[_cache_key(text)] = translation
+
+
+# ─── Text classification helpers ────────────────────────────────────────────
+
+def _word_count(text: str) -> int:
+    return len(text.split())
+
+
+def _is_technical(text: str) -> bool:
+    """Heuristic: text is 'technical' if >40 % of tokens are protected terms."""
+    protected_text, protected = _protect_terms(text)
+    if not protected:
+        return False
+    # Rough ratio: fraction of characters consumed by placeholders
+    original_len = len(text.strip())
+    placeholder_chars = sum(len(t) for t in protected)
+    return (placeholder_chars / max(original_len, 1)) > 0.40
+
+
+# ─── Online translation (Google Translate) ──────────────────────────────────
+
+_google_translator = None  # lazy singleton
+
+
+def _get_google_translator():
+    global _google_translator
+    if _google_translator is None:
+        from deep_translator import GoogleTranslator
+        _google_translator = GoogleTranslator(source="en", target="zh-CN")
+    return _google_translator
+
+
+def _online_translate_single(text: str) -> Optional[str]:
+    """Translate *one* string via Google Translate. Returns None on failure."""
+    try:
+        translator = _get_google_translator()
+        result = translator.translate(text)
+        if result and isinstance(result, str) and result.strip():
+            return result
+        return None
+    except Exception as exc:
+        logger.debug("Online translation failed: %s", exc)
+        return None
+
+
+def _online_translate_batch(texts: List[str]) -> List[Optional[str]]:
     """
-    Translate using the offline dictionary.
-    First tries exact phrase match, then word-by-word for shorter texts.
+    Translate a batch via Google Translate.
+    Falls back to one-by-one if the batch API isn't supported.
+    """
+    try:
+        translator = _get_google_translator()
+        results = translator.translate_batch(texts)
+        return [
+            r if (isinstance(r, str) and r.strip()) else None
+            for r in results
+        ]
+    except Exception:
+        # Fallback: one at a time
+        out: List[Optional[str]] = []
+        for t in texts:
+            out.append(_online_translate_single(t))
+            time.sleep(config.TRANSLATE_DELAY)
+        return out
+
+
+# ─── Core single-text translation ──────────────────────────────────────────
+
+def _translate_single(text: str, use_online: bool = False) -> str:
+    """
+    Translate a single English string to Chinese.
+
+    Strategy:
+      1. Check translation cache.
+      2. Try exact phrase-dict match (any length).
+      3. If use_online, try Google Translate with term protection.
+      4. Offline: short labels (≤5 words) → phrase match; medium (≤20) → phrase
+         substring match; long → passthrough.
+      5. Never produce mixed Chinese/English gibberish.
     """
     if not text or not text.strip():
         return text
 
     stripped = text.strip()
 
-    # Try exact phrase match (case-insensitive)
+    # Very short non-word content (punctuation, numbers, single chars)
+    if len(stripped) <= 2:
+        return text
+
+    # ── Cache hit ────────────────────────────────────────────────────────
+    cached = _get_cached(stripped)
+    if cached is not None:
+        return cached
+
+    # ── Exact phrase-dict match (case-insensitive) ───────────────────────
     lower = stripped.lower()
-    for phrase, translation in PHRASE_DICT.items():
-        if lower == phrase.lower():
-            return translation
+    if lower in _PHRASE_LOWER:
+        result = _PHRASE_LOWER[lower]
+        _set_cached(stripped, result)
+        return result
 
-    # Protect technical terms
-    protected_text, protected_terms = _protect_terms(stripped)
+    # ── Online translation with term protection ─────────────────────────
+    if use_online:
+        result = _translate_online_protected(stripped)
+        if result is not None:
+            _set_cached(stripped, result)
+            return result
 
-    # Try phrase replacement (longest match first)
+    # ── Offline phrase-based translation ─────────────────────────────────
+    return _translate_offline(stripped)
+
+
+def _translate_online_protected(text: str) -> Optional[str]:
+    """
+    Protect terms → translate via Google → restore terms.
+    Returns None if online fails.
+    """
+    protected_text, protected = _protect_terms(text)
+    translated = _online_translate_single(protected_text)
+    if translated is None:
+        return None
+    restored = _restore_terms(translated, protected)
+    # Quality check
+    if _has_placeholder_artifacts(restored):
+        logger.debug("Placeholder leak after online translate, retrying without protection")
+        # Try a plain translation as last resort
+        plain = _online_translate_single(text)
+        if plain and not _has_placeholder_artifacts(plain):
+            return plain
+        return None
+    return restored
+
+
+def _translate_offline(text: str) -> str:
+    """
+    Offline translation: phrase matching only, never word-by-word.
+
+    - Short (≤5 words): exact phrase-dict match or passthrough.
+    - Medium (≤20 words): try to match known sub-phrases; if the entire text
+      can be covered, use it; otherwise passthrough.
+    - Long (>20 words): passthrough with [EN] prefix.
+    """
+    words = _word_count(text)
+
+    # Short labels: try exact match (already tried above in _translate_single)
+    # but also try after stripping trailing punctuation / minor differences.
+    if words <= 5:
+        result = _try_phrase_match(text)
+        if result is not None:
+            _set_cached(text, result)
+            return result
+        # Short text with no match – if it's mostly a protected term, keep it
+        if _is_technical(text):
+            return text
+        return _passthrough(text, short=True)
+
+    # Medium text: try full substring coverage
+    if words <= 20:
+        result = _try_full_phrase_coverage(text)
+        if result is not None:
+            _set_cached(text, result)
+            return result
+        if _is_technical(text):
+            return text
+        return _passthrough(text, short=False)
+
+    # Long text: never attempt offline, keep English
+    if _is_technical(text):
+        return text
+    return _passthrough(text, short=False)
+
+
+def _try_phrase_match(text: str) -> Optional[str]:
+    """
+    Try matching text against PHRASE_DICT with minor normalization.
+    Returns translation or None.
+    """
+    stripped = text.strip()
+    lower = stripped.lower()
+    # exact
+    if lower in _PHRASE_LOWER:
+        return _PHRASE_LOWER[lower]
+    # strip trailing colon / punctuation
+    cleaned = re.sub(r"[:\.\!\?]+$", "", stripped).strip()
+    if cleaned.lower() in _PHRASE_LOWER:
+        return _PHRASE_LOWER[cleaned.lower()]
+    return None
+
+
+def _try_full_phrase_coverage(text: str) -> Optional[str]:
+    """
+    Try to fully translate text by matching known phrases as substrings.
+    Only returns a result if the ENTIRE text is covered (no leftover English
+    words mixed with Chinese). Protected terms are allowed as-is.
+    """
+    protected_text, protected = _protect_terms(text)
+
+    # Try to replace all known phrases in the protected text
     result = protected_text
     sorted_phrases = sorted(PHRASE_DICT.keys(), key=len, reverse=True)
     for phrase in sorted_phrases:
-        pattern = re.compile(re.escape(phrase), re.IGNORECASE)
-        if pattern.search(result):
-            result = pattern.sub(PHRASE_DICT[phrase], result)
+        pat = re.compile(re.escape(phrase), re.IGNORECASE)
+        result = pat.sub(PHRASE_DICT[phrase], result)
 
     # Restore protected terms
-    result = _restore_terms(result, protected_terms)
+    result = _restore_terms(result, protected)
 
-    return result
+    # Check: are there remaining English words that weren't translated?
+    temp = result
+    # Remove protected terms and Chinese characters to see leftover English
+    for term in protected:
+        temp = temp.replace(term, "")
+    # Remove Chinese chars, punctuation, whitespace, digits
+    leftover = re.sub(r"[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef\s\d\W]+", " ", temp).strip()
+    leftover_words = [w for w in leftover.split() if len(w) > 1 and w.isalpha()]
 
-
-def _try_online_translate(text: str) -> str | None:
-    """Try to use online translation, return None if unavailable."""
-    try:
-        from deep_translator import GoogleTranslator
-        result = GoogleTranslator(source="en", target="zh-CN").translate(text)
+    if not leftover_words:
+        # Full coverage achieved
+        if _has_placeholder_artifacts(result):
+            return None
         return result
-    except Exception:
-        return None
+    # Partial coverage → reject to avoid mixed gibberish
+    return None
 
 
-def _translate_single(text: str, use_online: bool = False) -> str:
-    """Translate a single string."""
-    if not text or not text.strip():
+def _passthrough(text: str, short: bool) -> str:
+    """
+    Return English text as-is.  For longer texts, prefix with [EN] to signal
+    that it needs human or online translation.
+    Short labels (≤5 words) are returned without prefix since they're
+    often navigation items that read fine in English.
+    """
+    if short:
         return text
+    return f"[EN] {text}"
 
-    if len(text.strip()) <= 2:
-        return text
 
-    if use_online:
-        result = _try_online_translate(text)
-        if result:
-            return result
+# ─── Quality verification ──────────────────────────────────────────────────
 
-    return _translate_offline(text)
+def _verify_translation(source: str, translated: str) -> str:
+    """
+    Post-translation quality checks.  Returns the (possibly corrected)
+    translation, or falls back to passthrough.
+    """
+    if not source or not source.strip():
+        return translated
 
+    # Non-empty source should not produce empty translation
+    if not translated or not translated.strip():
+        logger.debug("Empty translation for non-empty source, using passthrough")
+        return _passthrough(source, short=(_word_count(source) <= 5))
+
+    # Placeholder artifacts must not remain
+    if _has_placeholder_artifacts(translated):
+        logger.debug("Placeholder artifacts in translation, using passthrough")
+        return _passthrough(source, short=(_word_count(source) <= 5))
+
+    return translated
+
+
+# ─── Statistics tracking ────────────────────────────────────────────────────
+
+class _Stats:
+    def __init__(self):
+        self.total = 0
+        self.online = 0
+        self.phrase_match = 0
+        self.passthrough_en = 0
+        self.cached = 0
+        self.errors = 0
+
+    def log_summary(self):
+        logger.info(
+            "Translation stats: total=%d, online=%d, phrase_match=%d, "
+            "passthrough_en=%d, cached=%d, errors=%d",
+            self.total, self.online, self.phrase_match,
+            self.passthrough_en, self.cached, self.errors,
+        )
+
+
+# ─── Main entry point ──────────────────────────────────────────────────────
 
 def translate_entries(
     en_entries: Dict[str, Dict[str, Any]], use_online: bool = False
@@ -702,8 +921,15 @@ def translate_entries(
     Translate all extracted entries from English to Chinese.
     Returns a new dict with the same structure but translated values.
     """
+    _load_cache()
+    stats = _Stats()
+
     zh_entries: Dict[str, Dict[str, Any]] = {}
     total_pages = len(en_entries)
+
+    # Collect all unique strings for potential batch online translation
+    if use_online:
+        _batch_translate_all(en_entries, stats)
 
     for idx, (path, page_data) in enumerate(en_entries.items(), 1):
         if idx % 50 == 0 or idx == 1:
@@ -712,22 +938,136 @@ def translate_entries(
 
         for key, value in page_data.items():
             if isinstance(value, str):
-                zh_page[key] = _translate_single(value, use_online)
-                if use_online:
-                    time.sleep(config.TRANSLATE_DELAY)
+                zh_page[key] = _translate_and_track(value, use_online, stats)
             elif isinstance(value, list):
-                translated_list = []
-                for item in value:
-                    if isinstance(item, str):
-                        translated_list.append(_translate_single(item, use_online))
-                        if use_online:
-                            time.sleep(config.TRANSLATE_DELAY)
-                    else:
-                        translated_list.append(item)
-                zh_page[key] = translated_list
+                zh_page[key] = [
+                    _translate_and_track(item, use_online, stats)
+                    if isinstance(item, str)
+                    else item
+                    for item in value
+                ]
             else:
                 zh_page[key] = value
 
         zh_entries[path] = zh_page
 
+    _save_cache()
+    stats.log_summary()
     return zh_entries
+
+
+def _translate_and_track(
+    text: str, use_online: bool, stats: _Stats
+) -> str:
+    """Translate one string, update stats, apply quality checks."""
+    stats.total += 1
+    try:
+        stripped = text.strip() if text else ""
+        if not stripped or len(stripped) <= 2:
+            return text
+
+        # Cache hit?
+        cached = _get_cached(stripped)
+        if cached is not None:
+            stats.cached += 1
+            return cached
+
+        # Exact phrase match?
+        lower = stripped.lower()
+        if lower in _PHRASE_LOWER:
+            stats.phrase_match += 1
+            result = _PHRASE_LOWER[lower]
+            _set_cached(stripped, result)
+            return result
+
+        # Online?
+        if use_online:
+            online_result = _translate_online_protected(stripped)
+            if online_result is not None:
+                online_result = _verify_translation(stripped, online_result)
+                if not online_result.startswith("[EN] "):
+                    stats.online += 1
+                    _set_cached(stripped, online_result)
+                    return online_result
+
+        # Offline phrase-based
+        result = _translate_offline(stripped)
+        result = _verify_translation(stripped, result)
+
+        if result.startswith("[EN] ") or result == stripped:
+            stats.passthrough_en += 1
+        else:
+            stats.phrase_match += 1
+
+        return result
+
+    except Exception as exc:
+        stats.errors += 1
+        logger.warning("Translation error for %r: %s", text[:60], exc)
+        return text
+
+
+def _batch_translate_all(
+    en_entries: Dict[str, Dict[str, Any]], stats: _Stats
+) -> None:
+    """
+    Pre-translate all unique strings via batch online translation.
+    Results are stored in the cache so individual lookups are instant.
+    """
+    # Collect unique strings that aren't already cached or phrase-matched
+    unique_texts: List[str] = []
+    seen: set = set()
+
+    for page_data in en_entries.values():
+        for value in page_data.values():
+            items: List[str] = []
+            if isinstance(value, str):
+                items = [value]
+            elif isinstance(value, list):
+                items = [v for v in value if isinstance(v, str)]
+            for item in items:
+                s = item.strip()
+                if (
+                    s
+                    and len(s) > 2
+                    and s not in seen
+                    and _get_cached(s) is None
+                    and s.lower() not in _PHRASE_LOWER
+                ):
+                    unique_texts.append(s)
+                    seen.add(s)
+
+    if not unique_texts:
+        return
+
+    logger.info("Batch-translating %d unique strings online …", len(unique_texts))
+    batch_size = getattr(config, "TRANSLATE_BATCH_SIZE", 50)
+    translated_count = 0
+
+    for i in range(0, len(unique_texts), batch_size):
+        batch = unique_texts[i : i + batch_size]
+        # Protect terms in each text before sending
+        protected_pairs = [_protect_terms(t) for t in batch]
+        texts_to_send = [p[0] for p in protected_pairs]
+
+        results = _online_translate_batch(texts_to_send)
+
+        for original, (_, protected), result in zip(batch, protected_pairs, results):
+            if result is None:
+                continue
+            restored = _restore_terms(result, protected)
+            if _has_placeholder_artifacts(restored):
+                continue
+            restored = _verify_translation(original, restored)
+            if not restored.startswith("[EN] "):
+                _set_cached(original, restored)
+                translated_count += 1
+
+        # Rate limit between batches
+        time.sleep(config.TRANSLATE_DELAY)
+        # Periodic cache save
+        if (i // batch_size) % 10 == 9:
+            _save_cache()
+
+    logger.info("Batch translation done: %d / %d succeeded", translated_count, len(unique_texts))
+    _save_cache()
