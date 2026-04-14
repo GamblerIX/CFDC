@@ -22,7 +22,9 @@ permissions:
 jobs:
   translate:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    # Keep a safety buffer for validation + commit/push, so the job does not get
+    # hard-killed before translated results are committed.
+    timeout-minutes: 360
 
     steps:
       - name: Checkout repository
@@ -51,13 +53,34 @@ jobs:
           cd pythonplaywrightstealth
           python translate_remaining.py --dry-run
 
+      - name: Resolve effective max runtime
+        id: runtime
+        run: |
+          requested="${{ github.event.inputs.max_runtime_minutes || '300' }}"
+          job_timeout=360
+          commit_buffer=20
+          effective_limit=$((job_timeout - commit_buffer))
+
+          if [ "$requested" = "0" ]; then
+            # 0 means "disable" in script semantics.
+            effective="0"
+          elif [ "$requested" -gt "$effective_limit" ]; then
+            effective="$effective_limit"
+            echo "Requested max_runtime_minutes=$requested is too close to job timeout; capping to $effective to preserve commit window."
+          else
+            effective="$requested"
+          fi
+
+          echo "max_runtime_minutes=$effective" >> "$GITHUB_OUTPUT"
+          echo "Using max_runtime_minutes=$effective"
+
       - name: Run resumable translation
         run: |
           cd pythonplaywrightstealth
           python translate_remaining.py \
             --workers "${{ github.event.inputs.workers || '8' }}" \
             --save-interval "${{ github.event.inputs.save_interval || '500' }}" \
-            --max-runtime-minutes "${{ github.event.inputs.max_runtime_minutes || '300' }}"
+            --max-runtime-minutes "${{ steps.runtime.outputs.max_runtime_minutes }}"
 
       - name: Run validation
         run: |
