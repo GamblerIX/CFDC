@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -71,5 +73,15 @@ jobs:
             echo "No translation changes to commit"
           else
             git commit -m "chore: translate remaining [EN] entries (automated)"
-            git push
+            BRANCH="${GITHUB_REF_NAME}"
+            for attempt in 1 2 3; do
+              if git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH"; then
+                echo "Push succeeded on attempt $attempt"
+                exit 0
+              fi
+              echo "Push failed on attempt $attempt, retrying..."
+              sleep 5
+            done
+            echo "Push failed after 3 attempts"
+            exit 1
           fi
