@@ -1,0 +1,100 @@
+name: Playwright 抓取并翻译 Cloudflare Docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: '并发翻译线程数'
+        required: false
+        default: '8'
+      max_pages:
+        description: '抓取页面上限（0 表示 sitemap 全量）'
+        required: false
+        default: '0'
+      max_runtime_minutes:
+        description: '翻译最长运行时间（分钟，默认 300，设为 0 表示不限制）'
+        required: false
+        default: '300'
+
+permissions:
+  contents: write
+
+jobs:
+  scrape_translate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装依赖
+        run: |
+          pip install -r pythonplaywrightstealth/requirements.txt
+          python -m playwright install chromium
+
+      - name: 计算有效最大运行时长
+        id: runtime
+        run: |
+          requested="${{ github.event.inputs.max_runtime_minutes || '300' }}"
+          job_timeout=360
+          commit_buffer=20
+          effective_limit=$((job_timeout - commit_buffer))
+
+          if [ "$requested" = "0" ]; then
+            effective="0"
+          elif [ "$requested" -gt "$effective_limit" ]; then
+            effective="$effective_limit"
+            echo "请求时长过长，自动下调到 $effective 分钟，以保留提交窗口。"
+          else
+            effective="$requested"
+          fi
+
+          echo "max_runtime_minutes=$effective" >> "$GITHUB_OUTPUT"
+          echo "实际 max_runtime_minutes=$effective"
+
+      - name: 真实抓取 Cloudflare Docs HTML 并提取英文词条
+        run: |
+          cd pythonplaywrightstealth
+          python main.py --max-pages "${{ github.event.inputs.max_pages || '0' }}"
+
+      - name: 翻译剩余 [EN] 词条（受 max_runtime_minutes 限制）
+        run: |
+          cd pythonplaywrightstealth
+          python translate_remaining.py \
+            --workers "${{ github.event.inputs.workers || '8' }}" \
+            --max-runtime-minutes "${{ steps.runtime.outputs.max_runtime_minutes }}"
+
+      - name: 执行校验
+        run: |
+          cd pythonplaywrightstealth
+          python validate.py
+
+      - name: 提交词典更新
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add i18n/en.json i18n/zh-cn.json pythonplaywrightstealth/urls.json
+          if git diff --cached --quiet; then
+            echo "无可提交的词典变更"
+          else
+            git commit -m "chore: playwright 抓取并翻译 cloudflare docs"
+            BRANCH="${GITHUB_REF_NAME}"
+            for attempt in 1 2 3; do
+              if git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH"; then
+                echo "推送成功（第 $attempt 次）"
+                exit 0
+              fi
+              echo "推送失败（第 $attempt 次），5 秒后重试..."
+              sleep 5
+            done
+            echo "推送失败：超过最大重试次数"
+            exit 1
+          fi
