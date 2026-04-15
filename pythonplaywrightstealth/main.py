@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""
-main.py – Orchestrator for the CFDC crawler & translator pipeline.
-
-Usage:
-    python main.py                  # Full pipeline
-    python main.py --urls-only      # Only discover URLs
-    python main.py --extract-only   # Only extract (requires urls.json)
-    python main.py --translate-only  # Only translate (requires en.json)
-    python main.py --max-pages N    # Limit to N pages (for testing)
-
-Outputs:
-    ../i18n/en.json      – English text entries
-    ../i18n/zh-cn.json   – Chinese translations
-"""
+"""main.py：CFDC 抓取翻译总入口。"""
 
 import argparse
 import asyncio
@@ -35,70 +22,60 @@ logger = logging.getLogger("main")
 
 
 def save_json(data: dict, path: str) -> None:
-    """Write dict to a JSON file."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    logger.info("Saved %s (%d top-level keys)", path, len(data))
+    logger.info("已写入 %s（%d 个顶层键）", path, len(data))
 
 
 def load_json(path: str) -> dict:
-    """Read a JSON file."""
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 async def run(args: argparse.Namespace) -> None:
-    """Main async pipeline."""
-
     if args.max_pages:
         config.MAX_PAGES = args.max_pages
 
-    # ── Phase 1: URL discovery ──────────────────────────────────────────
     if not args.translate_only and not args.extract_only:
-        logger.info("═══ Phase 1: URL Discovery ═══")
-        urls = await discover_urls(use_bfs=args.bfs)
-        logger.info("Total URLs: %d", len(urls))
+        logger.info("═══ 阶段 1：发现 URL ═══")
+        urls = await discover_urls(use_bfs=args.bfs, save_to_file=True)
+        logger.info("URL 总数：%d", len(urls))
         if args.urls_only:
             return
+    elif args.extract_only:
+        if not os.path.exists(config.URLS_JSON_PATH):
+            logger.error("未找到 urls.json，请先执行 URL 发现阶段")
+            sys.exit(1)
+        urls = load_json(config.URLS_JSON_PATH)
 
-    # ── Phase 2: Content extraction ─────────────────────────────────────
     if not args.translate_only:
-        if args.extract_only:
-            if not os.path.exists(config.URLS_CACHE_PATH):
-                logger.error("urls.json not found. Run without --extract-only first.")
-                sys.exit(1)
-            urls = load_json(config.URLS_CACHE_PATH)
-
-        logger.info("═══ Phase 2: Content Extraction ═══")
+        logger.info("═══ 阶段 2：提取文本 ═══")
         en_entries = await extract_all(urls)
         save_json(en_entries, config.EN_JSON_PATH)
     else:
         if not os.path.exists(config.EN_JSON_PATH):
-            logger.error("en.json not found. Run extraction first.")
+            logger.error("未找到 en.json，请先执行提取阶段")
             sys.exit(1)
         en_entries = load_json(config.EN_JSON_PATH)
 
-    # ── Phase 3: Translation ────────────────────────────────────────────
-    logger.info("═══ Phase 3: Translation ═══")
+    logger.info("═══ 阶段 3：执行翻译 ═══")
     zh_entries = translate_entries(en_entries)
     save_json(zh_entries, config.ZH_CN_JSON_PATH)
 
-    # ── Done ────────────────────────────────────────────────────────────
-    logger.info("═══ Pipeline Complete ═══")
-    logger.info("  English entries: %s", config.EN_JSON_PATH)
-    logger.info("  Chinese entries: %s", config.ZH_CN_JSON_PATH)
+    logger.info("═══ 全流程完成 ═══")
+    logger.info("英文词条：%s", config.EN_JSON_PATH)
+    logger.info("中文词条：%s", config.ZH_CN_JSON_PATH)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="CFDC Crawler & Translator")
-    parser.add_argument("--urls-only", action="store_true", help="Only discover URLs")
-    parser.add_argument("--extract-only", action="store_true", help="Only extract content")
-    parser.add_argument("--translate-only", action="store_true", help="Only translate")
-    parser.add_argument("--bfs", action="store_true", help="Use BFS crawling in addition to sitemap")
-    parser.add_argument("--max-pages", type=int, default=0, help="Max pages to process (0 = unlimited)")
+    parser = argparse.ArgumentParser(description="CFDC 抓取与翻译工具")
+    parser.add_argument("--urls-only", action="store_true", help="仅发现 URL")
+    parser.add_argument("--extract-only", action="store_true", help="仅提取内容")
+    parser.add_argument("--translate-only", action="store_true", help="仅翻译")
+    parser.add_argument("--bfs", action="store_true", help="在 sitemap 之外启用 BFS")
+    parser.add_argument("--max-pages", type=int, default=0, help="处理页面上限（0 为不限制）")
     args = parser.parse_args()
-
     asyncio.run(run(args))
 
 

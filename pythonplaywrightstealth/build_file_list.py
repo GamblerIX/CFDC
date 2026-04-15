@@ -81,7 +81,7 @@ async def _fetch_json(
                 if resp.status == 403:
                     # Rate-limited – honour Retry-After if present
                     retry_after = int(resp.headers.get("Retry-After", RETRY_BACKOFF * attempt))
-                    logger.warning("Rate-limited (403). Retrying in %ds…", retry_after)
+                    logger.warning("触发限流（403），%d 秒后重试…", retry_after)
                     await asyncio.sleep(retry_after)
                     continue
                 body = await resp.text()
@@ -89,7 +89,7 @@ async def _fetch_json(
         except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as exc:
             last_exc = exc
             wait = RETRY_BACKOFF * attempt
-            logger.warning("Attempt %d/%d failed: %s. Retrying in %ds…", attempt, MAX_RETRIES, exc, wait)
+            logger.warning("第 %d/%d 次尝试失败：%s，%d 秒后重试…", attempt, MAX_RETRIES, exc, wait)
             await asyncio.sleep(wait)
 
     raise RuntimeError(f"All {MAX_RETRIES} attempts failed for {url}") from last_exc
@@ -100,7 +100,7 @@ async def _fetch_json(
 async def fetch_full_tree(session: aiohttp.ClientSession) -> dict:
     """Fetch the full recursive git tree for the branch."""
     url = f"{TREE_URL}/{BRANCH}"
-    logger.info("Fetching recursive tree from %s …", url)
+    logger.info("正在获取递归树：%s …", url)
     return await _fetch_json(session, url, params={"recursive": "1"})
 
 
@@ -138,7 +138,7 @@ async def _walk_to_subtree(
         data = await _fetch_json(session, f"{TREE_URL}/{sha}")
         entry = next((e for e in data["tree"] if e["path"] == part and e["type"] == "tree"), None)
         if entry is None:
-            raise RuntimeError(f"Subtree '{part}' not found under {sha}")
+            raise RuntimeError(f"子树 '{part}' 未找到于 {sha}")
         sha = entry["sha"]
     return sha
 
@@ -165,7 +165,7 @@ async def _fetch_section_tree(
 
 async def fetch_sections_individually(session: aiohttp.ClientSession) -> List[str]:
     """Fallback: discover sections, then fetch each section tree."""
-    logger.info("Falling back to per-section tree fetches …")
+    logger.info("递归树被截断，切换为按分区抓取 …")
 
     root_sha = await _resolve_tree_sha(session)
     docs_sha = await _walk_to_subtree(session, root_sha, DOCS_BASE.split("/"))
@@ -175,7 +175,7 @@ async def fetch_sections_individually(session: aiohttp.ClientSession) -> List[st
     sections = [
         e["path"] for e in docs_tree["tree"] if e["type"] == "tree"
     ]
-    logger.info("Found %d sections to scan individually", len(sections))
+    logger.info("待单独扫描分区数：%d", len(sections))
 
     all_files: List[str] = []
     for i, section in enumerate(sections, 1):
@@ -184,7 +184,7 @@ async def fetch_sections_individually(session: aiohttp.ClientSession) -> List[st
             files = await _fetch_section_tree(session, docs_sha, section)
             all_files.extend(files)
         except Exception as exc:
-            logger.warning("  Skipping section %s: %s", section, exc)
+            logger.warning("  跳过分区 %s: %s", section, exc)
 
     return sorted(all_files)
 
@@ -216,7 +216,7 @@ async def build_file_list() -> Dict[str, List[str]]:
         )
 
         if truncated:
-            logger.warning("Tree is truncated – using per-section fallback")
+            logger.warning("递归树结果被截断，使用按分区回退方案")
             mdx_files = await fetch_sections_individually(session)
         else:
             mdx_files = extract_mdx_files(tree_nodes)
@@ -225,7 +225,7 @@ async def build_file_list() -> Dict[str, List[str]]:
 
     # Statistics
     total = sum(len(v) for v in result.values())
-    logger.info("Discovery complete: %d .mdx files across %d sections", total, len(result))
+    logger.info("发现完成：共 %d 个 .mdx 文件，覆盖 %d 个分区", total, len(result))
     top5 = sorted(result.items(), key=lambda kv: len(kv[1]), reverse=True)[:5]
     for section, files in top5:
         logger.info("  %-30s %d files", section, len(files))
@@ -246,12 +246,12 @@ def parse_args() -> argparse.Namespace:
 
 async def main() -> None:
     args = parse_args()
-    logger.info("Building file list for %s/%s @ %s …", REPO_OWNER, REPO_NAME, BRANCH)
+    logger.info("开始构建文件列表：%s/%s @ %s …", REPO_OWNER, REPO_NAME, BRANCH)
 
     file_list = await build_file_list()
 
     total = sum(len(v) for v in file_list.values())
-    logger.info("Total: %d files across %d sections", total, len(file_list))
+    logger.info("总计：%d 个文件，%d 个分区", total, len(file_list))
 
     out = args.output
     out_dir = os.path.dirname(os.path.abspath(out))
@@ -259,7 +259,7 @@ async def main() -> None:
         os.makedirs(out_dir, exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(file_list, f, indent=2, ensure_ascii=False)
-    logger.info("Saved to %s", out)
+    logger.info("已写入 %s", out)
 
 
 if __name__ == "__main__":
