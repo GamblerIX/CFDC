@@ -583,9 +583,6 @@ def _has_placeholder_artifacts(text: str) -> bool:
 
 # ─── Translation cache ──────────────────────────────────────────────────────
 
-_CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache")
-_CACHE_PATH = os.path.join(_CACHE_DIR, "translation_cache.json")
-
 _translation_cache: Dict[str, str] = {}
 
 
@@ -597,26 +594,14 @@ def _cache_key(text: str) -> str:
 
 
 def _load_cache() -> None:
+    """缓存机制已移除：每次运行从空状态开始。"""
     global _translation_cache
-    if os.path.isfile(_CACHE_PATH):
-        try:
-            with open(_CACHE_PATH, "r", encoding="utf-8") as f:
-                _translation_cache = json.load(f)
-            logger.info("Loaded translation cache (%d entries)", len(_translation_cache))
-        except Exception as exc:
-            logger.warning("Failed to load translation cache: %s", exc)
-            _translation_cache = {}
-    else:
-        _translation_cache = {}
+    _translation_cache = {}
 
 
 def _save_cache() -> None:
-    try:
-        os.makedirs(_CACHE_DIR, exist_ok=True)
-        with open(_CACHE_PATH, "w", encoding="utf-8") as f:
-            json.dump(_translation_cache, f, indent=2, ensure_ascii=False)
-    except Exception as exc:
-        logger.warning("Failed to save translation cache: %s", exc)
+    """缓存机制已移除：不再落盘。"""
+    return
 
 
 def _get_cached(text: str) -> Optional[str]:
@@ -666,7 +651,7 @@ def _online_translate_single(text: str) -> Optional[str]:
             return result
         return None
     except Exception as exc:
-        logger.debug("Online translation failed: %s", exc)
+        logger.debug("在线翻译失败：%s", exc)
         return None
 
 
@@ -749,7 +734,7 @@ def _translate_online_protected(text: str) -> Optional[str]:
     restored = _restore_terms(translated, protected)
     # Quality check
     if _has_placeholder_artifacts(restored):
-        logger.debug("Placeholder leak after online translate, retrying without protection")
+        logger.debug("在线翻译后占位符残留，改为不保护重试")
         # Try a plain translation as last resort
         plain = _online_translate_single(text)
         if plain and not _has_placeholder_artifacts(plain):
@@ -877,12 +862,12 @@ def _verify_translation(source: str, translated: str) -> str:
 
     # Non-empty source should not produce empty translation
     if not translated or not translated.strip():
-        logger.debug("Empty translation for non-empty source, using passthrough")
+        logger.debug("源文本非空但译文为空，改为透传")
         return _passthrough(source, short=(_word_count(source) <= 5))
 
     # Placeholder artifacts must not remain
     if _has_placeholder_artifacts(translated):
-        logger.debug("Placeholder artifacts in translation, using passthrough")
+        logger.debug("译文存在占位符残留，改为透传")
         return _passthrough(source, short=(_word_count(source) <= 5))
 
     return translated
@@ -901,8 +886,8 @@ class _Stats:
 
     def log_summary(self):
         logger.info(
-            "Translation stats: total=%d, online=%d, phrase_match=%d, "
-            "passthrough_en=%d, cached=%d, errors=%d",
+            "翻译统计：总数=%d，在线=%d，短语匹配=%d，"
+            "英文透传=%d，命中内存缓存=%d，错误=%d",
             self.total, self.online, self.phrase_match,
             self.passthrough_en, self.cached, self.errors,
         )
@@ -929,7 +914,7 @@ def translate_entries(
 
     for idx, (path, page_data) in enumerate(en_entries.items(), 1):
         if idx % 50 == 0 or idx == 1:
-            logger.info("Translating page %d/%d: %s", idx, total_pages, path)
+            logger.info("翻译页面 %d/%d：%s", idx, total_pages, path)
         zh_page: Dict[str, Any] = {}
 
         for key, value in page_data.items():
@@ -999,7 +984,7 @@ def _translate_and_track(
 
     except Exception as exc:
         stats.errors += 1
-        logger.warning("Translation error for %r: %s", text[:60], exc)
+        logger.warning("翻译错误 %r：%s", text[:60], exc)
         return text
 
 
@@ -1036,7 +1021,7 @@ def _batch_translate_all(
     if not unique_texts:
         return
 
-    logger.info("Batch-translating %d unique strings online …", len(unique_texts))
+    logger.info("批量在线翻译唯一文本：%d", len(unique_texts))
     batch_size = getattr(config, "TRANSLATE_BATCH_SIZE", 50)
     translated_count = 0
 
@@ -1065,5 +1050,5 @@ def _batch_translate_all(
         if (i // batch_size) % 10 == 9:
             _save_cache()
 
-    logger.info("Batch translation done: %d / %d succeeded", translated_count, len(unique_texts))
+    logger.info("批量翻译完成：成功 %d / %d", translated_count, len(unique_texts))
     _save_cache()

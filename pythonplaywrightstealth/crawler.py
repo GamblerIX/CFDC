@@ -1,18 +1,11 @@
-"""
-crawler.py – URL discovery & page fetching using Playwright-stealth.
-
-Two-phase URL discovery:
-  1. Parse sitemap.xml (fast, no browser needed).
-  2. Optionally BFS-crawl with Playwright for URLs missing from the sitemap.
-"""
+"""crawler.py：文档 URL 发现模块（站点地图 + 可选 BFS 补充）。"""
 
 import asyncio
 import json
 import logging
 import os
-import re
 from typing import List, Set
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import aiohttp
 from lxml import etree
@@ -22,66 +15,56 @@ from playwright_stealth import Stealth  # type: ignore[import-untyped]
 import config
 
 stealth = Stealth()
-
 logger = logging.getLogger(__name__)
 
-# ─── Sitemap parsing ────────────────────────────────────────────────────────
 
 async def fetch_sitemap_urls() -> List[str]:
-    """Download and parse sitemap.xml (including nested sitemaps) to get all URLs."""
+    """下载并解析 sitemap（含嵌套 sitemap），返回文档 URL 列表。"""
     urls: Set[str] = set()
     to_fetch = [config.SITEMAP_URL]
 
     async with aiohttp.ClientSession() as session:
         while to_fetch:
             sitemap_url = to_fetch.pop()
-            logger.info("Fetching sitemap: %s", sitemap_url)
+            logger.info("正在抓取站点地图：%s", sitemap_url)
             try:
                 async with session.get(sitemap_url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     if resp.status != 200:
-                        logger.warning("Sitemap %s returned status %d", sitemap_url, resp.status)
+                        logger.warning("站点地图 %s 返回状态码 %d", sitemap_url, resp.status)
                         continue
                     xml_bytes = await resp.read()
             except Exception as exc:
-                logger.warning("Failed to fetch sitemap %s: %s", sitemap_url, exc)
+                logger.warning("抓取站点地图失败 %s：%s", sitemap_url, exc)
                 continue
 
             try:
                 root = etree.fromstring(xml_bytes)
             except etree.XMLSyntaxError as exc:
-                logger.warning("Failed to parse sitemap %s: %s", sitemap_url, exc)
+                logger.warning("解析站点地图失败 %s：%s", sitemap_url, exc)
                 continue
 
             ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-
-            # Nested sitemaps
             for loc in root.findall(".//sm:sitemap/sm:loc", ns):
                 if loc.text:
                     to_fetch.append(loc.text.strip())
 
-            # Actual page URLs
             for loc in root.findall(".//sm:url/sm:loc", ns):
                 if loc.text:
-                    url = loc.text.strip()
-                    if _is_valid_doc_url(url):
-                        urls.add(_normalise_url(url))
+                    url = _normalise_url(loc.text.strip())
+                    if url and _is_valid_doc_url(url):
+                        urls.add(url)
 
     result = sorted(urls)
-    logger.info("Sitemap discovery found %d URLs", len(result))
+    logger.info("站点地图发现 URL 数量：%d", len(result))
     return result
 
-
-# ─── BFS browser crawling (supplement) ──────────────────────────────────────
 
 async def bfs_crawl_urls(
     seed_urls: List[str] | None = None,
     known_urls: Set[str] | None = None,
     max_pages: int = 0,
 ) -> List[str]:
-    """
-    BFS-crawl using Playwright-stealth, starting from *seed_urls*.
-    Returns newly discovered URLs not in *known_urls*.
-    """
+    """使用浏览器 BFS 补充发现 URL。"""
     visited: Set[str] = set(known_urls or set())
     queue: list[str] = list(seed_urls or [config.BASE_URL + "/"])
     discovered: Set[str] = set()
@@ -101,75 +84,55 @@ async def bfs_crawl_urls(
         while queue:
             if 0 < max_pages <= len(visited):
                 break
+
             url = queue.pop(0)
             if url in visited:
                 continue
             visited.add(url)
 
-            logger.info("BFS visiting: %s", url)
+            logger.info("BFS 访问：%s", url)
             try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=config.PAGE_TIMEOUT_MS)
-                await page.wait_for_timeout(1000)  # let JS render
-
-                hrefs = await page.eval_on_selector_all(
-                    "a[href]",
-                    "els => els.map(e => e.href)",
-                )
+                await page.wait_for_timeout(1000)
+                hrefs = await page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
                 for href in hrefs:
                     norm = _normalise_url(href)
                     if norm and _is_valid_doc_url(norm) and norm not in visited:
                         queue.append(norm)
                         discovered.add(norm)
             except Exception as exc:
-                logger.warning("BFS error on %s: %s", url, exc)
+                logger.warning("BFS 抓取失败 %s：%s", url, exc)
 
             await asyncio.sleep(config.CRAWL_DELAY)
 
         await browser.close()
 
     new_urls = sorted(discovered - (known_urls or set()))
-    logger.info("BFS crawl discovered %d new URLs", len(new_urls))
+    logger.info("BFS 新发现 URL 数量：%d", len(new_urls))
     return new_urls
 
 
-# ─── Combined URL discovery ─────────────────────────────────────────────────
-
-async def discover_urls(use_bfs: bool = False) -> List[str]:
-    """
-    Full URL discovery pipeline.
-    1. Try sitemap.
-    2. Optionally supplement with BFS.
-    3. Cache to urls.json.
-    """
-    # Check cache
-    if os.path.exists(config.URLS_CACHE_PATH):
-        logger.info("Loading cached URLs from %s", config.URLS_CACHE_PATH)
-        with open(config.URLS_CACHE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-
+async def discover_urls(use_bfs: bool = False, save_to_file: bool = True) -> List[str]:
+    """完整 URL 发现流程，不使用缓存。"""
     urls = await fetch_sitemap_urls()
 
     if use_bfs:
-        extra = await bfs_crawl_urls(known_urls=set(urls))
+        extra = await bfs_crawl_urls(known_urls=set(urls), max_pages=config.MAX_PAGES)
         urls = sorted(set(urls) | set(extra))
 
     if config.MAX_PAGES > 0:
         urls = urls[: config.MAX_PAGES]
 
-    # Cache
-    with open(config.URLS_CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(urls, f, indent=2, ensure_ascii=False)
-    logger.info("Saved %d URLs to %s", len(urls), config.URLS_CACHE_PATH)
+    if save_to_file:
+        with open(config.URLS_JSON_PATH, "w", encoding="utf-8") as f:
+            json.dump(urls, f, indent=2, ensure_ascii=False)
+        logger.info("已输出 URL 列表：%s（%d 条）", config.URLS_JSON_PATH, len(urls))
 
     return urls
 
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
-
 def _normalise_url(url: str) -> str:
-    """Strip fragment and query, ensure trailing slash for directories."""
     parsed = urlparse(url)
-    # Only keep same-origin
     if parsed.netloc and parsed.netloc != urlparse(config.BASE_URL).netloc:
         return ""
     path = parsed.path.rstrip("/") + "/"
@@ -177,11 +140,8 @@ def _normalise_url(url: str) -> str:
 
 
 def _is_valid_doc_url(url: str) -> bool:
-    """Return True if the URL looks like a documentation page."""
     if not url.startswith(config.BASE_URL):
         return False
     parsed = urlparse(url)
     ext = os.path.splitext(parsed.path)[1].lower()
-    if ext in config.SKIP_EXTENSIONS:
-        return False
-    return True
+    return ext not in config.SKIP_EXTENSIONS

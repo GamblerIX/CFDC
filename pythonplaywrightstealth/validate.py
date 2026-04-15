@@ -4,7 +4,7 @@ validate.py – Comprehensive validation of CFDC i18n output.
 
 Checks key alignment, empty values, coverage against file_list.json,
 translation quality, and generates statistics.  Prints a human-readable
-report to stdout and writes a detailed JSON report to cache/.
+report to stdout and writes a detailed JSON report file.
 
 Usage:
     python validate.py
@@ -499,13 +499,13 @@ def main() -> None:
     args = parser.parse_args()
 
     # ── Load data ───────────────────────────────────────────────────────
-    logger.info("Loading English JSON: %s", args.en_path)
+    logger.info("加载英文 JSON：%s", args.en_path)
     en = load_json(args.en_path)
-    logger.info("Loading Chinese JSON: %s", args.zh_path)
+    logger.info("加载中文 JSON：%s", args.zh_path)
     zh = load_json(args.zh_path)
 
     # ── Run checks ──────────────────────────────────────────────────────
-    logger.info("Running validation checks …")
+    logger.info("正在执行校验 …")
 
     report: Dict[str, Any] = {
         "key_alignment": check_key_alignment(en, zh),
@@ -520,9 +520,9 @@ def main() -> None:
     # ── Output ──────────────────────────────────────────────────────────
     print_report(report, verbose=args.verbose)
 
-    report_path = os.path.join(SCRIPT_DIR, "cache", "validation_report.json")
+    report_path = config.VALIDATION_REPORT_PATH
     save_json(report, report_path)
-    logger.info("Detailed JSON report saved to %s", report_path)
+    logger.info("详细 JSON 报告已写入 %s", report_path)
 
     # ── Exit code ───────────────────────────────────────────────────────
     if not report["key_alignment"]["passed"]:

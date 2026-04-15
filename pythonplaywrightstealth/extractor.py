@@ -1,13 +1,7 @@
-"""
-extractor.py – Extract translatable text entries from rendered pages.
-
-Uses Playwright-stealth to load each page and pull out structured text.
-"""
+"""extractor.py：从渲染后的页面中提取可翻译文本。"""
 
 import asyncio
-import json
 import logging
-import os
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
@@ -17,12 +11,8 @@ from playwright_stealth import Stealth  # type: ignore[import-untyped]
 import config
 
 stealth = Stealth()
-
 logger = logging.getLogger(__name__)
 
-# CSS selectors and their logical names
-# (selector, key_prefix, extract_mode)
-#   extract_mode: "text" = innerText, "list" = list of innerText from children
 SELECTORS: list[tuple[str, str, str]] = [
     ("article h1", "h1", "text"),
     ("article h2", "h2", "text_list"),
@@ -34,23 +24,17 @@ SELECTORS: list[tuple[str, str, str]] = [
     ("article th", "th", "text_list"),
     ("article blockquote", "blockquote", "text_list"),
     ("article a", "link", "text_list"),
-    # Sidebar / navigation
     ("nav a", "nav", "text_list"),
 ]
 
 
 async def extract_page_entries(page: Page, url: str) -> Dict[str, Any]:
-    """
-    Navigate to *url* and extract translatable text entries.
-    Returns a dict keyed by selector-based identifiers.
-    """
-    path = urlparse(url).path
+    """进入单页并提取文本条目。"""
     entries: Dict[str, Any] = {}
-
     try:
         await page.goto(url, wait_until="networkidle", timeout=config.PAGE_TIMEOUT_MS)
     except Exception as exc:
-        logger.warning("Failed to load %s: %s", url, exc)
+        logger.warning("页面加载失败 %s：%s", url, exc)
         return entries
 
     for selector, key_prefix, mode in SELECTORS:
@@ -66,37 +50,20 @@ async def extract_page_entries(page: Page, url: str) -> Dict[str, Any]:
                 texts = []
                 for el in elements:
                     txt = (await el.inner_text()).strip()
-                    if txt and txt not in texts:  # deduplicate
+                    if txt and txt not in texts:
                         texts.append(txt)
                 if texts:
                     entries[key_prefix] = texts
         except Exception as exc:
-            logger.debug("Selector %s failed on %s: %s", selector, url, exc)
+            logger.debug("选择器 %s 在 %s 提取失败：%s", selector, url, exc)
 
     return entries
 
 
 async def extract_all(urls: List[str]) -> Dict[str, Dict[str, Any]]:
-    """
-    Extract text entries from all URLs.
-    Returns {path: {key: value, ...}, ...}.
-    Supports resuming from cache.
-    """
+    """提取全部 URL，不做断点缓存。"""
     all_entries: Dict[str, Dict[str, Any]] = {}
-
-    # Load partial cache if exists
-    if os.path.exists(config.ENTRIES_CACHE_PATH):
-        with open(config.ENTRIES_CACHE_PATH, "r", encoding="utf-8") as f:
-            all_entries = json.load(f)
-        logger.info("Loaded %d cached page entries", len(all_entries))
-
-    # Filter already-done URLs
-    remaining = [u for u in urls if urlparse(u).path not in all_entries]
-    if not remaining:
-        logger.info("All pages already extracted.")
-        return all_entries
-
-    logger.info("Extracting entries from %d pages (%d already cached)", len(remaining), len(all_entries))
+    logger.info("开始提取页面：%d", len(urls))
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
@@ -109,7 +76,6 @@ async def extract_all(urls: List[str]) -> Dict[str, Dict[str, Any]]:
         )
         await stealth.apply_stealth_async(context)
 
-        # Process in batches with concurrency
         sem = asyncio.Semaphore(config.CONCURRENCY)
 
         async def _process(url: str) -> None:
@@ -120,26 +86,16 @@ async def extract_all(urls: List[str]) -> Dict[str, Dict[str, Any]]:
                     path = urlparse(url).path
                     if entries:
                         all_entries[path] = entries
-                        logger.info("  ✓ %s (%d keys)", path, len(entries))
+                        logger.info("✓ %s（%d 个键）", path, len(entries))
                     else:
-                        logger.info("  ✗ %s (no entries)", path)
+                        logger.info("✗ %s（无条目）", path)
                 except Exception as exc:
-                    logger.warning("  ✗ %s error: %s", url, exc)
+                    logger.warning("✗ %s 提取异常：%s", url, exc)
                 finally:
                     await p.close()
                 await asyncio.sleep(config.CRAWL_DELAY)
 
-        # Process all remaining, save periodically
-        batch_size = 50
-        for i in range(0, len(remaining), batch_size):
-            batch = remaining[i : i + batch_size]
-            await asyncio.gather(*[_process(u) for u in batch])
-
-            # Save checkpoint
-            with open(config.ENTRIES_CACHE_PATH, "w", encoding="utf-8") as f:
-                json.dump(all_entries, f, indent=2, ensure_ascii=False)
-            logger.info("Checkpoint: %d total pages extracted", len(all_entries))
-
+        await asyncio.gather(*[_process(u) for u in urls])
         await browser.close()
 
     return all_entries

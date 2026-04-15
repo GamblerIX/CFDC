@@ -1,18 +1,14 @@
-name: Translate remaining entries
+name: 翻译剩余词条
 
 on:
   workflow_dispatch:
     inputs:
       workers:
-        description: 'Number of concurrent translation workers'
+        description: '并发翻译线程数'
         required: false
         default: '8'
-      save_interval:
-        description: 'Save cache every N items'
-        required: false
-        default: '500'
       max_runtime_minutes:
-        description: 'Max translation runtime in minutes (default 300, set 0 to disable)'
+        description: '翻译最长运行时间（分钟，默认 300，设为 0 表示不限制）'
         required: false
         default: '300'
 
@@ -22,38 +18,28 @@ permissions:
 jobs:
   translate:
     runs-on: ubuntu-latest
-    # Keep a safety buffer for validation + commit/push, so the job does not get
-    # hard-killed before translated results are committed.
     timeout-minutes: 360
 
     steps:
-      - name: Checkout repository
+      - name: 检出仓库
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: 设置 Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: 安装依赖
         run: pip install -r pythonplaywrightstealth/requirements.txt
 
-      - name: Restore translation cache
-        uses: actions/cache@v4
-        with:
-          path: pythonplaywrightstealth/cache
-          key: translation-cache-${{ github.run_id }}
-          restore-keys: |
-            translation-cache-
-
-      - name: Count remaining entries (before)
+      - name: 统计翻译前剩余条目
         run: |
           cd pythonplaywrightstealth
           python translate_remaining.py --dry-run
 
-      - name: Resolve effective max runtime
+      - name: 计算有效最大运行时长
         id: runtime
         run: |
           requested="${{ github.event.inputs.max_runtime_minutes || '300' }}"
@@ -62,49 +48,47 @@ jobs:
           effective_limit=$((job_timeout - commit_buffer))
 
           if [ "$requested" = "0" ]; then
-            # 0 means "disable" in script semantics.
             effective="0"
           elif [ "$requested" -gt "$effective_limit" ]; then
             effective="$effective_limit"
-            echo "Requested max_runtime_minutes=$requested is too close to job timeout; capping to $effective to preserve commit window."
+            echo "请求时长过长，自动下调到 $effective 分钟，以保留提交窗口。"
           else
             effective="$requested"
           fi
 
           echo "max_runtime_minutes=$effective" >> "$GITHUB_OUTPUT"
-          echo "Using max_runtime_minutes=$effective"
+          echo "实际 max_runtime_minutes=$effective"
 
-      - name: Run resumable translation
+      - name: 执行翻译
         run: |
           cd pythonplaywrightstealth
           python translate_remaining.py \
             --workers "${{ github.event.inputs.workers || '8' }}" \
-            --save-interval "${{ github.event.inputs.save_interval || '500' }}" \
             --max-runtime-minutes "${{ steps.runtime.outputs.max_runtime_minutes }}"
 
-      - name: Run validation
+      - name: 执行校验
         run: |
           cd pythonplaywrightstealth
           python validate.py
 
-      - name: Commit translated entries
+      - name: 提交翻译结果
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add i18n/zh-cn.json
           if git diff --cached --quiet; then
-            echo "No translation changes to commit"
+            echo "无可提交的翻译变更"
           else
-            git commit -m "chore: translate remaining [EN] entries (automated)"
+            git commit -m "chore: 自动翻译剩余词条"
             BRANCH="${GITHUB_REF_NAME}"
             for attempt in 1 2 3; do
               if git pull --rebase origin "$BRANCH" && git push origin HEAD:"$BRANCH"; then
-                echo "Push succeeded on attempt $attempt"
+                echo "推送成功（第 $attempt 次）"
                 exit 0
               fi
-              echo "Push failed on attempt $attempt, retrying..."
+              echo "推送失败（第 $attempt 次），5 秒后重试..."
               sleep 5
             done
-            echo "Push failed after 3 attempts"
+            echo "推送失败：超过最大重试次数"
             exit 1
           fi
