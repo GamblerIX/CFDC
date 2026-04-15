@@ -28,6 +28,36 @@
 
   const textNodes = new Set();
 
+  function isPlainObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function collectTranslations(enNode, zhNode, map) {
+    if (typeof enNode === 'string' && typeof zhNode === 'string') {
+      const source = enNode.trim();
+      const translated = zhNode.trim();
+      if (source && translated && !translated.startsWith('[EN]')) {
+        map[source] = translated;
+      }
+      return;
+    }
+
+    if (Array.isArray(enNode) && Array.isArray(zhNode)) {
+      const len = Math.min(enNode.length, zhNode.length);
+      for (let i = 0; i < len; i += 1) {
+        collectTranslations(enNode[i], zhNode[i], map);
+      }
+      return;
+    }
+
+    if (isPlainObject(enNode) && isPlainObject(zhNode)) {
+      for (const [key, value] of Object.entries(enNode)) {
+        if (!(key in zhNode)) continue;
+        collectTranslations(value, zhNode[key], map);
+      }
+    }
+  }
+
   function safeJsonParse(raw) {
     try {
       return JSON.parse(raw);
@@ -101,12 +131,7 @@
     }
 
     const map = {};
-    for (const [key, value] of Object.entries(en)) {
-      const source = String(value || '').trim();
-      const translated = String(zh[key] || '').trim();
-      if (!source || !translated || translated.startsWith('[EN]')) continue;
-      map[source] = translated;
-    }
+    collectTranslations(en, zh, map);
 
     if (!Object.keys(map).length) {
       throw new Error('没有可用词条。');
