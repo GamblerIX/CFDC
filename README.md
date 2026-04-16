@@ -4,6 +4,8 @@ CFDC 用于抓取并翻译 Cloudflare Developers 文档内容，产出标准 i18
 
 - `i18n/en.json`：英文原文词条
 - `i18n/zh-cn.json`：中文翻译词条
+- `i18n/userscript-en.json`：用户脚本独立英文词条
+- `i18n/userscript-zh-cn.json`：用户脚本独立中文词条
 
 本仓库已移除运行缓存机制，任务默认按“全量执行、直接输出结果”方式运行。
 
@@ -15,6 +17,7 @@ CFDC 用于抓取并翻译 Cloudflare Developers 文档内容，产出标准 i18
 - `pythonplaywrightstealth/translate_remaining.py`：并发翻译 `[EN]` 前缀的剩余条目
 - `pythonplaywrightstealth/validate.py`：校验 key 对齐、覆盖率和翻译质量
 - `.github/workflows/translate.yml`：手动触发的自动翻译工作流
+- `cfdc.user.js`：浏览器用户脚本（只读取独立 userscript 词条，不依赖自动翻译产物）
 
 ## 快速开始
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CFDC
 // @namespace    http://github.com/GamblerIX/
-// @version      2026-04-15
+// @version      2026-04-16
 // @description  将 Cloudflare Developers 文档优先替换为中文词条。
 // @author       GamblerIX
 // @match        https://developers.cloudflare.com/*
@@ -15,9 +15,9 @@
 (function () {
   'use strict';
 
-  const EN_URL = 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/en.json';
-  const ZH_URL = 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/zh-cn.json';
-  const CACHE_KEY = 'cfdc_i18n_map_v1';
+  const EN_URL = 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/userscript-en.json';
+  const ZH_URL = 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/userscript-zh-cn.json';
+  const CACHE_KEY = 'cfdc_i18n_map_v2';
   const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 小时
 
   const logger = {

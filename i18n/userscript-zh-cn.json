@@ -1,0 +1,9 @@
+{
+  "common": {
+    "Documentation": "文档",
+    "Overview": "概述",
+    "Learn more": "了解更多",
+    "Reference": "参考",
+    "Examples": "示例"
+  }
+}
