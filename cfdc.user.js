@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         CFDC
 // @namespace    http://github.com/GamblerIX/
-// @version      2026-04-16
+// @version      2026-04-16.2
 // @description  将 Cloudflare Developers 文档优先替换为中文词条。
 // @author       GamblerIX
 // @match        https://developers.cloudflare.com/*
@@ -15,9 +15,20 @@
 (function () {
   'use strict';
 
-  const EN_URL = 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/userscript-en.json';
-  const ZH_URL = 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/userscript-zh-cn.json';
-  const CACHE_KEY = 'cfdc_i18n_map_v2';
+  const DICT_URLS = [
+    {
+      name: 'userscript',
+      en: 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/userscript-en.json',
+      zh: 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/userscript-zh-cn.json',
+    },
+    {
+      name: 'full',
+      en: 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/en.json',
+      zh: 'https://raw.githubusercontent.com/GamblerIX/CFDC/main/i18n/zh-cn.json',
+    },
+  ];
+
+  const CACHE_KEY = 'cfdc_i18n_map_v3';
   const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 小时
 
   const logger = {
@@ -77,12 +88,14 @@
       localStorage.removeItem(CACHE_KEY);
       return null;
     }
-    return cached.map;
+
+    return cached;
   }
 
-  function saveCache(map) {
+  function saveCache(dictName, map) {
     const payload = {
       expireAt: Date.now() + CACHE_TTL_MS,
+      dictName,
       map,
     };
     localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
@@ -115,31 +128,47 @@
     });
   }
 
-  async function loadI18nMap() {
-    const cache = loadCache();
-    if (cache) {
-      logger.info(`已加载缓存词条：${Object.keys(cache).length} 项`);
-      return cache;
-    }
-
-    const [enRaw, zhRaw] = await Promise.all([request(EN_URL), request(ZH_URL)]);
+  async function loadDictionaryPair(dict) {
+    const [enRaw, zhRaw] = await Promise.all([request(dict.en), request(dict.zh)]);
     const en = safeJsonParse(enRaw);
     const zh = safeJsonParse(zhRaw);
 
     if (!en || !zh || typeof en !== 'object' || typeof zh !== 'object') {
-      throw new Error('词典文件格式异常。');
+      throw new Error(`${dict.name} 词典文件格式异常。`);
     }
 
     const map = {};
     collectTranslations(en, zh, map);
 
     if (!Object.keys(map).length) {
-      throw new Error('没有可用词条。');
+      throw new Error(`${dict.name} 没有可用词条。`);
     }
 
-    saveCache(map);
-    logger.info(`词典加载完成：${Object.keys(map).length} 项`);
     return map;
+  }
+
+  async function loadI18nMap() {
+    const cache = loadCache();
+    if (cache) {
+      logger.info(`已加载缓存词条：${Object.keys(cache.map).length} 项（${cache.dictName || 'unknown'}）`);
+      return cache.map;
+    }
+
+    let lastError = null;
+
+    for (const dict of DICT_URLS) {
+      try {
+        const map = await loadDictionaryPair(dict);
+        saveCache(dict.name, map);
+        logger.info(`词典加载完成：${Object.keys(map).length} 项（${dict.name}）`);
+        return map;
+      } catch (error) {
+        lastError = error;
+        logger.warn(`词典加载失败（${dict.name}），尝试下一个。`, error);
+      }
+    }
+
+    throw lastError || new Error('无法加载可用词典。');
   }
 
   function walkTextNodes(root) {
@@ -162,18 +191,18 @@
   }
 
   function replaceTextInNode(node, map) {
-    let content = node.nodeValue;
-    let changed = false;
+    const content = node.nodeValue;
+    if (!content) return;
 
-    for (const [from, to] of Object.entries(map)) {
-      if (!content.includes(from)) continue;
-      content = content.split(from).join(to);
-      changed = true;
-    }
+    const leading = content.match(/^\s*/)?.[0] ?? '';
+    const trailing = content.match(/\s*$/)?.[0] ?? '';
+    const core = content.trim();
+    if (!core) return;
 
-    if (changed) {
-      node.nodeValue = content;
-    }
+    const translated = map[core];
+    if (!translated || translated === core) return;
+
+    node.nodeValue = `${leading}${translated}${trailing}`;
   }
 
   function applyTranslations(map) {
