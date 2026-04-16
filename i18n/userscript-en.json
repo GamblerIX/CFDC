@@ -1,0 +1,9 @@
+{
+  "common": {
+    "Documentation": "Documentation",
+    "Overview": "Overview",
+    "Learn more": "Learn more",
+    "Reference": "Reference",
+    "Examples": "Examples"
+  }
+}
