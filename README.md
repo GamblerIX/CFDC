@@ -41,6 +41,15 @@ playwright install chromium
 python main.py --bfs --max-pages 100
 ```
 
+
+# 诊断 userscript 词典条目异常（例如仅 5 条）
+
+```bash
+python pythonplaywrightstealth/debug_userscript_dictionary.py
+# 写回 userscript 词典
+python pythonplaywrightstealth/debug_userscript_dictionary.py --write
+```
+
 ## 常用命令
 
 ```bash
