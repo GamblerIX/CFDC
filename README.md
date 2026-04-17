@@ -50,6 +50,19 @@ python pythonplaywrightstealth/debug_userscript_dictionary.py
 python pythonplaywrightstealth/debug_userscript_dictionary.py --write
 ```
 
+## 页面级翻译覆盖率验证（全页面文本）
+
+```bash
+# 默认验证首页、1.1.1.1、Workers 三个页面
+python pythonplaywrightstealth/debug_page_translation_coverage.py
+
+# 指定页面并输出更多未覆盖样本
+python pythonplaywrightstealth/debug_page_translation_coverage.py \
+  https://developers.cloudflare.com/1.1.1.1/ \
+  https://developers.cloudflare.com/workers/ \
+  --sample-untranslated 20
+```
+
 ## 常用命令
 
 ```bash
