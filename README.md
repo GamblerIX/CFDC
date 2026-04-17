@@ -41,6 +41,28 @@ playwright install chromium
 python main.py --bfs --max-pages 100
 ```
 
+
+# 诊断 userscript 词典条目异常（例如仅 5 条）
+
+```bash
+python pythonplaywrightstealth/debug_userscript_dictionary.py
+# 写回 userscript 词典
+python pythonplaywrightstealth/debug_userscript_dictionary.py --write
+```
+
+## 页面级翻译覆盖率验证（全页面文本）
+
+```bash
+# 默认验证首页、1.1.1.1、Workers 三个页面
+python pythonplaywrightstealth/debug_page_translation_coverage.py
+
+# 指定页面并输出更多未覆盖样本
+python pythonplaywrightstealth/debug_page_translation_coverage.py \
+  https://developers.cloudflare.com/1.1.1.1/ \
+  https://developers.cloudflare.com/workers/ \
+  --sample-untranslated 20
+```
+
 ## 常用命令
 
 ```bash

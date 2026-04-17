@@ -14,18 +14,29 @@ stealth = Stealth()
 logger = logging.getLogger(__name__)
 
 SELECTORS: list[tuple[str, str, str]] = [
-    ("article h1", "h1", "text"),
-    ("article h2", "h2", "text_list"),
-    ("article h3", "h3", "text_list"),
-    ("article h4", "h4", "text_list"),
-    ("article p", "p", "text_list"),
-    ("article li", "li", "text_list"),
-    ("article td", "td", "text_list"),
-    ("article th", "th", "text_list"),
-    ("article blockquote", "blockquote", "text_list"),
-    ("article a", "link", "text_list"),
+    ("main[data-pagefind-body] h1, main h1", "h1", "text"),
+    ("main[data-pagefind-body] h2, main h2", "h2", "text_list"),
+    ("main[data-pagefind-body] h3, main h3", "h3", "text_list"),
+    ("main[data-pagefind-body] h4, main h4", "h4", "text_list"),
+    ("main[data-pagefind-body] p, main p", "p", "text_list"),
+    ("main[data-pagefind-body] li, main li", "li", "text_list"),
+    ("main[data-pagefind-body] td, main td", "td", "text_list"),
+    ("main[data-pagefind-body] th, main th", "th", "text_list"),
+    ("main[data-pagefind-body] blockquote, main blockquote", "blockquote", "text_list"),
+    ("main[data-pagefind-body] a, main a", "link", "text_list"),
     ("nav a", "nav", "text_list"),
 ]
+
+
+def count_entry_items(entries: Dict[str, Any]) -> int:
+    """统计一个页面中提取到的文本总条数。"""
+    total = 0
+    for value in entries.values():
+        if isinstance(value, str):
+            total += 1
+        elif isinstance(value, list):
+            total += len(value)
+    return total
 
 
 async def extract_page_entries(page: Page, url: str) -> Dict[str, Any]:
@@ -86,7 +97,7 @@ async def extract_all(urls: List[str]) -> Dict[str, Dict[str, Any]]:
                     path = urlparse(url).path
                     if entries:
                         all_entries[path] = entries
-                        logger.info("✓ %s（%d 个键）", path, len(entries))
+                        logger.info("✓ %s（%d 个键 / %d 条文本）", path, len(entries), count_entry_items(entries))
                     else:
                         logger.info("✗ %s（无条目）", path)
                 except Exception as exc:
